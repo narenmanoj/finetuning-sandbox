@@ -21,6 +21,7 @@ def evaluate_vllm(
     eval_sampling_params: SamplingParams,
     prompts: List[str],
     answers: List[str] | None=None,
+    print_convo: bool=False,
 ):
     outputs = vllm_model.generate(prompts, eval_sampling_params)
     rewards = {}
@@ -28,14 +29,15 @@ def evaluate_vllm(
         prompt = prompts[i]
         generated_text = outputs[i].outputs[0].text
         rewards[prompt] = reward_fn(generated_text, answers[i])
-        print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+        if print_convo:
+            print(f"\nPrompt: {prompt!r}, Generated text: {generated_text!r}\n")
     return rewards
 
 
 if __name__ == "__main__":
     with open("prompts/r1_zero.prompt", "r") as f:
         base_prompt = f.read()
-    llm = LLM(model="Qwen/Qwen2.5-1.5B")
+    llm = LLM(model="Qwen/Qwen2.5-1.5B", dtype="float16")
     math_dataset = load_dataset("hiyouga/math12k")
     train_math_dataset = format_dataset(base_prompt, math_dataset["train"])
     test_math_dataset = format_dataset(base_prompt, math_dataset["test"])
