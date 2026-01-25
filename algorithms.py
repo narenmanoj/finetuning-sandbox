@@ -6,6 +6,7 @@ from functools import partial
 import gc
 from math_grader import r1_zero_reward_fn
 import pandas as pd
+from transformers import AutoTokenizer
 from torch.utils.data import DataLoader
 from typing import Callable, List
 from vllm import LLM, SamplingParams
@@ -35,9 +36,11 @@ def evaluate_vllm(
 
 
 if __name__ == "__main__":
+    model_str = "Qwen/Qwen2.5-Math-1.5B"
     with open("prompts/r1_zero.prompt", "r") as f:
         base_prompt = f.read()
-    llm = LLM(model="Qwen/Qwen2.5-1.5B", dtype="float16")
+    llm = LLM(model=model_str, dtype="float16")
+    tokenizer = AutoTokenizer.from_pretrained(model_str)
     math_dataset = load_dataset("hiyouga/math12k")
     train_math_dataset = format_dataset(base_prompt, math_dataset["train"])
     test_math_dataset = format_dataset(base_prompt, math_dataset["test"])
@@ -56,6 +59,5 @@ if __name__ == "__main__":
                               list(test_math_dataset.to_pandas()["problem"]),
                               list(test_math_dataset.to_pandas()["answer"]))
     reward_df.to_csv("outputs/qwen_rewards_base.csv")
-    breakpoint()
     del llm
     gc.collect()
