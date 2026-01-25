@@ -4,6 +4,7 @@ from datasets import (
 )
 from functools import partial
 from math_grader import r1_zero_reward_fn
+import pandas as pd
 from torch.utils.data import DataLoader
 from typing import Callable, List
 from vllm import LLM, SamplingParams
@@ -31,7 +32,7 @@ def evaluate_vllm(
         rewards[prompt] = reward_fn(generated_text, answers[i])
         if print_convo:
             print(f"\nPrompt: {prompt!r}, Generated text: {generated_text!r}\n")
-    return rewards
+    return pd.DataFrame(rewards)
 
 
 if __name__ == "__main__":
