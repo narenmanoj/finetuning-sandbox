@@ -26,11 +26,12 @@ def evaluate_vllm(
     print_convo: bool=False,
 ):
     outputs = vllm_model.generate(prompts, eval_sampling_params)
-    rewards = {}
+    rewards = []
     for i in range(len(prompts)):
         prompt = prompts[i]
         generated_text = outputs[i].outputs[0].text
-        rewards[prompt] = reward_fn(generated_text, answers[i])
+        rewards.append(reward_fn(generated_text, answers[i]))
+        rewards[-1].update({"prompt": prompt})
         if print_convo:
             print(f"\nPrompt: {prompt!r}, Generated text: {generated_text!r}\n")
     return pd.DataFrame(rewards)
