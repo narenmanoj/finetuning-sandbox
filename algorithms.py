@@ -23,17 +23,14 @@ def evaluate_vllm(
     eval_sampling_params: SamplingParams,
     prompts: List[str],
     answers: List[str] | None=None,
-    print_convo: bool=False,
 ):
     outputs = vllm_model.generate(prompts, eval_sampling_params)
-    rewards = []
-    for i in range(len(prompts)):
-        prompt = prompts[i]
-        generated_text = outputs[i].outputs[0].text
-        rewards.append(reward_fn(generated_text, answers[i]))
-        rewards[-1].update({"prompt": prompt, "generated_text": generated_text})
-        if print_convo:
-            print(f"\nPrompt: {prompt!r}, Generated text: {generated_text!r}\n")
+    def _score_output(prompt, output):
+        generated_text = output.outputs[0].text
+        rw = reward_fn(generated_text, answers[i])
+        rw.update({"prompt": prompt, "generated_text": generated_text})
+        return rw
+    rewards = [_score_output(prompts[i], outputs[i]) for i in range(len(prompts))]
     return pd.DataFrame(rewards)
 
 
