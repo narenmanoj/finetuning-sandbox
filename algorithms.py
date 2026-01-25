@@ -3,6 +3,7 @@ from datasets import (
     load_dataset,
 )
 from functools import partial
+import gc
 from math_grader import r1_zero_reward_fn
 import pandas as pd
 from torch.utils.data import DataLoader
@@ -56,3 +57,5 @@ if __name__ == "__main__":
                   sampling_params,
                   list(test_math_dataset.to_pandas()["problem"]),
                   list(test_math_dataset.to_pandas()["answer"]))
+    del llm
+    gc.collect()
