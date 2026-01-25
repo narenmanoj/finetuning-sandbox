@@ -52,10 +52,12 @@ if __name__ == "__main__":
         stop=["</answer>"],
         include_stop_str_in_output=True
     )
-    evaluate_vllm(llm,
-                  r1_zero_reward_fn,
-                  sampling_params,
-                  list(test_math_dataset.to_pandas()["problem"]),
-                  list(test_math_dataset.to_pandas()["answer"]))
+    reward_df = evaluate_vllm(llm,
+                              r1_zero_reward_fn,
+                              sampling_params,
+                              list(test_math_dataset.to_pandas()["problem"]),
+                              list(test_math_dataset.to_pandas()["answer"]))
+    reward_df.to_csv("outputs/qwen_rewards_base.csv")
+    breakpoint()
     del llm
     gc.collect()
