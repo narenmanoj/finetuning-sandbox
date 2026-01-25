@@ -31,7 +31,7 @@ def evaluate_vllm(
         prompt = prompts[i]
         generated_text = outputs[i].outputs[0].text
         rewards.append(reward_fn(generated_text, answers[i]))
-        rewards[-1].update({"prompt": prompt})
+        rewards[-1].update({"prompt": prompt, "generated_text": generated_text})
         if print_convo:
             print(f"\nPrompt: {prompt!r}, Generated text: {generated_text!r}\n")
     return pd.DataFrame(rewards)
