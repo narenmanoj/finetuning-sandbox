@@ -25,12 +25,12 @@ def evaluate_vllm(
     answers: List[str] | None=None,
 ):
     outputs = vllm_model.generate(prompts, eval_sampling_params)
-    def _score_output(prompt, output):
+    def _score_output(prompt, output, answer):
         generated_text = output.outputs[0].text
-        rw = reward_fn(generated_text, answers[i])
+        rw = reward_fn(generated_text, answer)
         rw.update({"prompt": prompt, "generated_text": generated_text})
         return rw
-    rewards = [_score_output(prompts[i], outputs[i]) for i in range(len(prompts))]
+    rewards = [_score_output(prompts[i], outputs[i], answers[i]) for i in range(len(prompts))]
     return pd.DataFrame(rewards)
 
 
