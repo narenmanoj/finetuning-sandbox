@@ -2,7 +2,6 @@ from datasets import (
     Dataset,
     load_dataset,
 )
-from functools import partial
 import gc
 from math_grader import r1_zero_reward_fn
 import pandas as pd
