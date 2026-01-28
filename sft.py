@@ -44,4 +44,6 @@ def get_response_log_probs(
     labels: torch.Tensor,
     return_token_entropy: bool = False,
 ) -> dict[str, torch.Tensor]:
-    return {"None": torch.zeros(1)}
+    logits = model(input_ids).logits
+    return {"log_probs": torch.zeros(1),
+            "token_entropy": torch.zeros(1)}
