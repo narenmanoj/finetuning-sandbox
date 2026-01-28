@@ -29,3 +29,7 @@ def tokenize_prompt_and_output(prompt_strs: List[str],
         "response_mask": mask,
     }
     return ans
+
+
+def compute_entropy(logits: torch.Tensor) -> torch.Tensor:
+    return 0
