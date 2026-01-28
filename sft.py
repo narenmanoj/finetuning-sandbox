@@ -10,7 +10,7 @@ def tokenize_prompt_and_output(prompt_strs: List[str],
     prompt_tokenized = tokenizer(prompt_strs)["input_ids"]
     output_tokenized = tokenizer(output_strs)["input_ids"]
     stitched = [torch.tensor(prompt_tokenized[i] + output_tokenized[i]) for i in range(len(prompt_tokenized))]
-    stitched = pad_sequence(stitched, batch_first=True, padding_value=0)
+    stitched = pad_sequence(stitched, batch_first=True, padding_value=-1, padding_side="left")
     breakpoint()
     ans = {
         "input_ids": torch.tensor(prompt_tokenized),
