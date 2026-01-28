@@ -9,7 +9,7 @@ def tokenize_prompt_and_output(prompt_strs: List[str],
 ) -> Dict[str, torch.Tensor]:
     prompt_tokenized = tokenizer(prompt_strs)["input_ids"]
     output_tokenized = tokenizer(output_strs)["input_ids"]
-    stitched = [(torch.tensor(prompt_tokenized[i] + output_tokenized[i]), torch.tensor([0] * len(prompt_tokenized[i] + [1] * len(output_tokenized[i])))) for i in range(len(prompt_tokenized))]
+    stitched = [(torch.tensor(prompt_tokenized[i] + output_tokenized[i]), torch.tensor([0] * len(prompt_tokenized[i]) + [1] * len(output_tokenized[i]))) for i in range(len(prompt_tokenized))]
     tokens = [stitch[0] for stitch in stitched]
     mask = [stitch[1] for stitch in stitched]
     stitched = pad_sequence(tokens, batch_first=True, padding_value=-1, padding_side="left")
