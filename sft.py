@@ -16,7 +16,7 @@ def tokenize_prompt_and_output(prompt_strs: List[str],
     mask = [stitch[1] for stitch in stitched]
 
     maxlen = max([len(x) for x in tokens]) - 1
-    inputs = [tokenized[:min(maxlen, len(tokenized) - 1)] for tokenized in tokens]
+    inputs = [tokenized[:min(maxlen, len(tokenized))] for tokenized in tokens]
     labels_lst = [tokenized[1:] for tokenized in tokens]
     mask = [tokenized[1:] for tokenized in mask]
 
