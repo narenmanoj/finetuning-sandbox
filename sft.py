@@ -50,3 +50,11 @@ def get_response_log_probs(
     log_probs = torch.gather(logp, dim=-1, index=labels.unsqueeze(-1)).squeeze(-1)
     return {"log_probs": log_probs,
             "token_entropy": token_entropy}
+
+def masked_normalize(
+    tensor: torch.Tensor,
+    mask: torch.Tensor,
+    normalize_constant: float,
+    dim: int | None = None,
+) -> torch.Tensor:
+    return torch.tensor(0)
