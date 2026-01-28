@@ -20,10 +20,6 @@ def tokenize_prompt_and_output(prompt_strs: List[str],
     labels_lst = [tokenized[1:] for tokenized in tokens]
     mask = [tokenized[1:] for tokenized in mask]
 
-    # inputs = [tokenized[:-1] for tokenized in tokens]
-    # labels_lst = [tokenized[1:] for tokenized in tokens]
-    # mask = [tokenized[1:] for tokenized in mask]
-
     input_ids = pad_sequence(inputs, batch_first=True, padding_value=tokenizer.vocab_size, padding_side="right")
     labels = pad_sequence(labels_lst, batch_first=True, padding_value=tokenizer.vocab_size, padding_side="right")
     mask = pad_sequence(mask, batch_first=True, padding_value=0, padding_side="right")
