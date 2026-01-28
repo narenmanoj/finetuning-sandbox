@@ -34,6 +34,5 @@ def tokenize_prompt_and_output(prompt_strs: List[str],
 def compute_entropy(logits: torch.Tensor) -> torch.Tensor:
     p = torch.softmax(logits, dim=-1)
     denom = torch.logsumexp(logits, dim=-1)
-    breakpoint()
-    logp = logits - denom
+    logp = logits - denom.unsqueeze(-1)
     return -torch.sum(p * logp, dim=-1)
