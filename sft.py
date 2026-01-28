@@ -69,4 +69,4 @@ def sft_microbatch_train_step(
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     loss = masked_normalize(policy_log_probs, response_mask, normalize_constant=normalize_constant) / gradient_accumulation_steps
     loss.backward()
-    return loss
+    return (loss, {"Loss value": loss})
