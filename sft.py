@@ -14,10 +14,9 @@ def tokenize_prompt_and_output(prompt_strs: List[str],
     mask = [stitch[1] for stitch in stitched]
     stitched = pad_sequence(tokens, batch_first=True, padding_value=-1, padding_side="left")
     response = pad_sequence(mask, batch_first=True, padding_value=0, padding_side="left")
-    breakpoint()
     ans = {
-        "input_ids": torch.tensor(prompt_tokenized),
-        "labels": torch.tensor(output_tokenized),
+        "input_ids": stitched[:, :-1],
+        "labels": stitched[:, 1:],
         "response_mask": response,
     }
     return ans
