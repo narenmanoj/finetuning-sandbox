@@ -1,6 +1,6 @@
 import torch
 from torch.nn.utils.rnn import pad_sequence
-from transformers import PreTrainedTokenizer
+from transformers import PreTrainedModel, PreTrainedTokenizer
 from typing import List, Dict
 
 def tokenize_prompt_and_output(prompt_strs: List[str],
@@ -36,3 +36,12 @@ def compute_entropy(logits: torch.Tensor) -> torch.Tensor:
     denom = torch.logsumexp(logits, dim=-1)
     logp = logits - denom.unsqueeze(-1)
     return -torch.sum(p * logp, dim=-1)
+
+
+def get_response_log_probs(
+    model: PreTrainedModel,
+    input_ids: torch.Tensor,
+    labels: torch.Tensor,
+    return_token_entropy: bool = False,
+) -> dict[str. torch.Tensor]:
+    return {"None": torch.zeros(1)}
