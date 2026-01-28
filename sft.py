@@ -15,9 +15,14 @@ def tokenize_prompt_and_output(prompt_strs: List[str],
     tokens = [stitch[0] for stitch in stitched]
     mask = [stitch[1] for stitch in stitched]
 
-    inputs = [tokenized[:-1] for tokenized in tokens]
+    maxlen = max([len(x) for x in tokens]) - 1
+    inputs = [tokenized[:min(maxlen, len(tokenized) - 1)] for tokenized in tokens]
     labels_lst = [tokenized[1:] for tokenized in tokens]
     mask = [tokenized[1:] for tokenized in mask]
+
+    # inputs = [tokenized[:-1] for tokenized in tokens]
+    # labels_lst = [tokenized[1:] for tokenized in tokens]
+    # mask = [tokenized[1:] for tokenized in mask]
 
     input_ids = pad_sequence(inputs, batch_first=True, padding_value=tokenizer.vocab_size, padding_side="right")
     labels = pad_sequence(labels_lst, batch_first=True, padding_value=tokenizer.vocab_size, padding_side="right")
