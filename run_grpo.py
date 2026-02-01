@@ -1,6 +1,7 @@
 import argparse
 from datetime import datetime
 import gc
+import itertools
 import json
 import multiprocessing as mp
 import os
@@ -67,10 +68,11 @@ def train_one_epoch(model,
         answers = data["answer"]
         # texts[b][k]
         texts = rollout_client.generate(prompts, sampling_params_dict)
+        texts_flattened = list(itertools.chain.from_iterable(texts))
         # Do the actual GRPO logic here
         breakpoint()
         rewards = compute_group_normalized_rewards(reward_fn=reward_fn,
-                                                   rollout_responses=texts,
+                                                   rollout_responses=texts_flattened,
                                                    repeated_ground_truths=answers,
                                                    group_size=hyperparams["group_size"],
                                                    advantage_eps=hyperparams["advantage_eps"],
