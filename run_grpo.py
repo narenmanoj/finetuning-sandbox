@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import torch
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from vllm import LLM, SamplingParams
@@ -11,6 +12,11 @@ from vllm import LLM, SamplingParams
 from algorithms import evaluate_vllm, load_model_and_dataset
 from grpo import grpo_microbatch_train_step
 from sft import get_response_log_probs, tokenize_prompt_and_output
+
+EPOCH_KEY = "epoch"
+MODEL_STATE_KEY = "model_state_dict"
+OPTIMIZER_STATE_KEY = "optimizer_state_dict"
+LOSS_KEY = "loss"
 
 
 def read_json_to_dict(filename):
@@ -28,7 +34,18 @@ def read_json_to_dict(filename):
         print(f"Error: Could not decode JSON from the file '{filename}'. Check file format.")
         return None
 
-def train_one_epoch(model, hyperparams):
+def train_one_epoch(model,
+                    optimizer,
+                    hyperparams,
+                    epoch_index,
+                    tb_writer,
+                    loss_fn,
+                    dataloader,
+                    logdir,
+                    device,
+                    val_dataloader=None,
+                    print_every=100):
+    num_epochs = hyperparams["n_grpo_steps"]
     raise NotImplementedError
 
 if __name__ == "__main__":
@@ -57,10 +74,30 @@ if __name__ == "__main__":
         epoch_index = args.load_checkpoint.rsplit("/", 1)[1]
         hyperparams = read_json_to_dict(Path(f"{logdir}/config.json"))
 
-    model = LLM(model=hyperparams["model_str"], dtype=hyperparams["dtype"])
-
+    model, train_dataset, test_dataset = load_model_and_dataset(model_str=hyperparams["model_str"],
+                                                                dataset_str=hyperparams["dataset_str"],
+                                                                prompt="prompts/r1_zero.prompt",
+                                                                dtype=hyperparams["dtype"])
+    train_dataloader = DataLoader(train_dataset,
+                                  batch_size=hyperparams["train_batch_size"],
+                                  shuffle=True)
+    test_dataloader = DataLoader(test_dataset,
+                                 batch_size=hyperparams["train_batch_size"],
+                                 shuffle=True)
     opt_params = hyperparams["optimizer_params"]
     optimizer = torch.optim.AdamW(model.params(),
                                   lr=opt_params["learning_rate"],
                                   betas=opt_params["betas"],
                                   weight_decay=opt_params["weight_decay"])
+    current_epoch = 0
+    if len(args.load_checkpoint) > 0:
+        checkpoint_file = f"{logdir}/{epoch_index}_checkpoint.tar"
+        checkpoint = torch.load(checkpoint_file)
+        model.load_state_dict(checkpoint[MODEL_STATE_KEY])
+        optimizer.load_state_dict(checkpoint[OPTIMIZER_STATE_KEY])
+        current_epoch = checkpoint[EPOCH_KEY] + 1
+        loaded_loss = checkpoint[LOSS_KEY]
+        print(f"Resuming from beginning of epoch {current_epoch}")
+        print(f"Current loss = {loaded_loss}")
+    tb_writer = SummaryWriter(logdir)
+    for epoch_it in tqdm(range(current_epoch, hyperparams["num_epochs"], 1)):
