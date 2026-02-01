@@ -143,6 +143,8 @@ if __name__ == "__main__":
                         reward_fn=r1_zero_reward_fn,
                         dataloader=train_dataloader,
                         val_dataloader=test_dataloader,
+                        device=device,
+                        logdir=logdir,
         )
     del model
     gc.collect()
