@@ -90,9 +90,8 @@ def train_one_epoch(model,
             optimizer.zero_grad()
             # refresh vLLM weights every optimizer step (or every N steps)
             model.save_pretrained(vllm_snapshot_dir, safe_serialization=True)
-            # then rebuild engine (heavy but straightforward)
-            model.save_pretrained(vllm_snapshot_dir, safe_serialization=True)
-            rollout_client.reload(vllm_snapshot_dir)
+            if rollout_client is not None:
+                rollout_client.reload(vllm_snapshot_dir)
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),
@@ -149,13 +148,13 @@ def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, vllm_dtype: str, gpu_m
 
 
 class RolloutClient:
-    def __init__(self, model_path_or_id: str, vllm_dtype="bfloat16", gpu_mem_util=0.90):
+    def __init__(self, model_path_or_id: str, vllm_dtype="bfloat16", gpu_mem_util=0.90, gpu_id=1):
         ctx = mp.get_context("spawn")  # important with CUDA
         self.in_q = ctx.Queue(maxsize=2)
         self.out_q = ctx.Queue(maxsize=2)
         self.proc = ctx.Process(
             target=_vllm_worker_loop,
-            args=(self.in_q, self.out_q, model_path_or_id, vllm_dtype, gpu_mem_util),
+            args=(self.in_q, self.out_q, model_path_or_id, vllm_dtype, gpu_mem_util, gpu_id),
             daemon=True,
         )
         self.proc.start()
@@ -224,7 +223,7 @@ if __name__ == "__main__":
     model.save_pretrained(vllm_snapshot_dir, safe_serialization=True)
 
     if use_vllm_rollouts:
-        rollouts = RolloutClient(model_path_or_id=vllm_snapshot_dir, vllm_dtype=hyperparams["dtype"])
+        rollouts = RolloutClient(model_path_or_id=vllm_snapshot_dir, vllm_dtype=hyperparams["dtype"], gpu_mem_util=hyperparams["gpu_memory_utilization"], gpu_id=num_gpus - 1)
     else:
         rollouts = None
 
