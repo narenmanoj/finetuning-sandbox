@@ -68,6 +68,7 @@ def train_one_epoch(model,
         # texts[b][k]
         texts = rollout_client.generate(prompts, sampling_params_dict)
         # Do the actual GRPO logic here
+        breakpoint()
         rewards = compute_group_normalized_rewards(reward_fn=reward_fn,
                                                    rollout_responses=texts,
                                                    repeated_ground_truths=answers,
