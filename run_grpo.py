@@ -156,7 +156,6 @@ class RolloutClient:
         self.proc = ctx.Process(
             target=_vllm_worker_loop,
             args=(self.in_q, self.out_q, model_path_or_id, tokenizer_path, default_sampling_params, vllm_dtype, gpu_mem_util),
-            daemon=True,
         )
         old_cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
         os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
@@ -183,6 +182,9 @@ class RolloutClient:
     def close(self):
         self.in_q.put(None)
         self.proc.join(timeout=10)
+        if self.proc.is_alive():
+            self.proc.terminate()
+            self.proc.join(timeout=10)
 
 
 if __name__ == "__main__":
