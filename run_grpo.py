@@ -51,6 +51,14 @@ def train_one_epoch(model,
     last_reward = 0.0
     num_epochs = hyperparams["n_grpo_steps"]
     gradient_accumulation_steps = hyperparams["gradient_accumulation_steps"]
+    pbar = tqdm(enumerate(dataloader), total=len(dataloader), 
+                desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=True)
+
+    # Here, we use enumerate(training_loader) instead of
+    # iter(training_loader) so that we can track the batch
+    # index and do some intra-epoch reporting
+    for i, data in pbar:
+        breakpoint()
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),
