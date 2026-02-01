@@ -132,7 +132,7 @@ if __name__ == "__main__":
         print(f"Resuming from beginning of epoch {current_epoch}")
         print(f"Current reward = {loaded_reward}")
     tb_writer = SummaryWriter(logdir)
-    for epoch_it in tqdm(range(current_epoch, hyperparams["num_epochs"], 1)):
+    for epoch_it in tqdm(range(current_epoch, hyperparams["n_grpo_steps"], 1)):
         train_one_epoch(model=model,
                         optimizer=optimizer,
                         tokenizer=tokenizer,
