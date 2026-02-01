@@ -8,6 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from vllm import SamplingParams
 
 from algorithms import evaluate_vllm, load_model_and_dataset
@@ -38,6 +39,7 @@ def read_json_to_dict(filename):
 
 def train_one_epoch(model,
                     optimizer,
+                    tokenizer,
                     sampling_params,
                     hyperparams,
                     epoch_index,
@@ -94,9 +96,11 @@ if __name__ == "__main__":
         epoch_index = args.load_checkpoint.rsplit("/", 1)[1]
         hyperparams = read_json_to_dict(Path(f"{logdir}/config.json"))
 
+    tokenizer = AutoTokenizer.from_pretrained(hyperparams["model_str"], use_fast=True)
     model, train_dataset, test_dataset = load_model_and_dataset(model_str=hyperparams["model_str"],
                                                                 dataset_str=hyperparams["dataset_str"],
                                                                 prompt="prompts/r1_zero.prompt",
+                                                                device=device,
                                                                 dtype=hyperparams["dtype"])
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=hyperparams["train_batch_size"],
@@ -130,6 +134,7 @@ if __name__ == "__main__":
     for epoch_it in tqdm(range(current_epoch, hyperparams["num_epochs"], 1)):
         train_one_epoch(model=model,
                         optimizer=optimizer,
+                        tokenizer=tokenizer,
                         sampling_params=sampling_params,
                         hyperparams=hyperparams,
                         epoch_index=epoch_it,

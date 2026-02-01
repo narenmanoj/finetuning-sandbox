@@ -5,7 +5,8 @@ from datasets import (
 import gc
 from math_grader import r1_zero_reward_fn
 import pandas as pd
-from transformers import AutoTokenizer
+from transformers import AutoModelForCausalLM
+import torch
 from torch.utils.data import DataLoader
 from typing import Callable, List
 from vllm import LLM, SamplingParams
@@ -34,12 +35,17 @@ def evaluate_vllm(
     return pd.DataFrame(rewards)
 
 
-def load_model_and_dataset(model_str, dataset_str, prompt=None, dtype="float16"):
+def load_model_and_dataset(model_str, dataset_str, prompt=None, dtype="float16", device=None):
     base_prompt = None
     if prompt is not None:
         with open(prompt, "r") as f:
             base_prompt = f.read()
-    llm = LLM(model=model_str, dtype=dtype)
+    # llm = LLM(model=model_str, dtype=dtype)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_str,
+        torch_dtype=dtype,
+        device_map=device,
+    )
     # tokenizer = AutoTokenizer.from_pretrained(model_str)
     math_dataset = load_dataset(dataset_str)
     train_dataset = format_dataset(base_prompt, math_dataset["train"])
