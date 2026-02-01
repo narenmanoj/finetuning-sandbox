@@ -51,7 +51,7 @@ def load_model_and_dataset(model_str, dataset_str, prompt=None, dtype="float16",
     train_dataset = format_dataset(base_prompt, math_dataset["train"])
     test_dataset = format_dataset(base_prompt, math_dataset["test"])
     
-    return (llm, train_dataset, test_dataset)
+    return (model, train_dataset, test_dataset)
 
 
 if __name__ == "__main__":
