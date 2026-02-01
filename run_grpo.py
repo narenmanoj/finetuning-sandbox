@@ -1,5 +1,6 @@
 import argparse
 from datetime import datetime
+import gc
 import json
 import os
 from pathlib import Path
@@ -137,3 +138,5 @@ if __name__ == "__main__":
                         dataloader=train_dataloader,
                         val_dataloader=test_dataloader,
         )
+    del model
+    gc.collect()
