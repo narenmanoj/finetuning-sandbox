@@ -102,6 +102,7 @@ if __name__ == "__main__":
                                                                 prompt="prompts/r1_zero.prompt",
                                                                 device=device,
                                                                 dtype=hyperparams["dtype"])
+    model.train()
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=hyperparams["train_batch_size"],
                                   shuffle=True)
