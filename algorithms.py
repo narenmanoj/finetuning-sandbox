@@ -34,17 +34,27 @@ def evaluate_vllm(
     return pd.DataFrame(rewards)
 
 
+def load_model_and_dataset(model_str, dataset_str, prompt=None, dtype="float16"):
+    base_prompt = None
+    if prompt is not None:
+        with open(prompt, "r") as f:
+            base_prompt = f.read()
+    llm = LLM(model=model_str, dtype=dtype)
+    # tokenizer = AutoTokenizer.from_pretrained(model_str)
+    math_dataset = load_dataset(dataset_str)
+    train_dataset = format_dataset(base_prompt, math_dataset["train"])
+    test_dataset = format_dataset(base_prompt, math_dataset["test"])
+    
+    return (llm, train_dataset, test_dataset)
+
+
 if __name__ == "__main__":
-    model_str = "Qwen/Qwen2.5-Math-1.5B"
-    with open("prompts/r1_zero.prompt", "r") as f:
-        base_prompt = f.read()
-    llm = LLM(model=model_str, dtype="float16")
-    tokenizer = AutoTokenizer.from_pretrained(model_str)
-    math_dataset = load_dataset("hiyouga/math12k")
-    train_math_dataset = format_dataset(base_prompt, math_dataset["train"])
-    test_math_dataset = format_dataset(base_prompt, math_dataset["test"])
-    train_dataloader = DataLoader(train_math_dataset, batch_size=8, shuffle=True)
-    test_dataloader = DataLoader(test_math_dataset, batch_size=8, shuffle=True)
+    llm, train_dataset, test_dataset = load_model_and_dataset(model_str="Qwen/Qwen2.5-Math-1.5B",
+                                                              dataset_str="hiyouga/math12k",
+                                                              prompt="prompts/r1_zero.prompt",
+                                                              dtype="float16")
+    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=8, shuffle=True)
     sampling_params = SamplingParams(
         temperature=1.0,
         top_p=1.0,
@@ -55,8 +65,8 @@ if __name__ == "__main__":
     reward_df = evaluate_vllm(llm,
                               r1_zero_reward_fn,
                               sampling_params,
-                              list(test_math_dataset.to_pandas()["problem"]),
-                              list(test_math_dataset.to_pandas()["answer"]))
+                              list(test_dataset.to_pandas()["problem"]),
+                              list(test_dataset.to_pandas()["answer"]))
     reward_df.to_csv("outputs/qwen_rewards_base.csv")
     del llm
     gc.collect()
