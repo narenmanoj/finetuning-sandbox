@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from vllm import SamplingParams
+from vllm import LLM, SamplingParams
 
 from algorithms import evaluate_vllm, load_model_and_dataset
 from grpo import grpo_microbatch_train_step
@@ -38,6 +38,7 @@ def read_json_to_dict(filename):
         return None
 
 def train_one_epoch(model,
+                    rollout_llm,
                     optimizer,
                     tokenizer,
                     sampling_params,
@@ -62,9 +63,17 @@ def train_one_epoch(model,
     # index and do some intra-epoch reporting
     for i, data in pbar:
         breakpoint()
+        tokenized = tokenize_prompt_and_output(data["problem"], data["answer"], tokenizer=tokenizer)
         if (i + 1) % gradient_accumulation_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
+            # refresh vLLM weights every optimizer step (or every N steps)
+            model.save_pretrained(vllm_ckpt_dir, safe_serialization=True)
+            # then rebuild engine (heavy but straightforward)
+            del rollout_llm
+            gc.collect()
+            torch.cuda.empty_cache()
+            rollout_llm = LLM(model=vllm_ckpt_dir, dtype="bfloat16", gpu_memory_utilization=0.6)
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),
@@ -106,6 +115,24 @@ if __name__ == "__main__":
                                                                 device=device,
                                                                 dtype=hyperparams["dtype"])
     model.train()
+
+    # Choose where vLLM will read weights/tokenizer/config from.
+    # This directory must contain config.json + tokenizer files + model weights.
+    vllm_ckpt_dir = f"{logdir}/vllm_ckpt"
+    os.makedirs(vllm_ckpt_dir, exist_ok=True)
+
+    # Write HF-format checkpoint (vLLM can load this).
+    tokenizer.save_pretrained(vllm_ckpt_dir)
+    model.save_pretrained(vllm_ckpt_dir, safe_serialization=True)
+
+    # Create the vLLM inference engine.
+    # gpu_memory_utilization controls how much GPU memory vLLM reserves. :contentReference[oaicite:3]{index=3}
+    rollout_llm = LLM(
+        model=vllm_ckpt_dir,
+        dtype=hyperparams["dtype"],
+        gpu_memory_utilization=hyperparams["gpu_memory_utilization"],
+    )
+
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=hyperparams["train_batch_size"],
                                   shuffle=True)
@@ -137,6 +164,7 @@ if __name__ == "__main__":
     tb_writer = SummaryWriter(logdir)
     for epoch_it in tqdm(range(current_epoch, hyperparams["n_grpo_steps"], 1)):
         train_one_epoch(model=model,
+                        rollout_llm=rollout_llm,
                         optimizer=optimizer,
                         tokenizer=tokenizer,
                         sampling_params=sampling_params,
