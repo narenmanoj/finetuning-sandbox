@@ -41,7 +41,6 @@ def train_one_epoch(model,
                     rollout_client,
                     optimizer,
                     tokenizer,
-                    sampling_params,
                     hyperparams,
                     epoch_index,
                     tb_writer,
@@ -106,7 +105,7 @@ def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, tokenizer_path: str, d
 
     llm = LLM(
         model=model_path_or_id,
-        tokenizer_path=tokenizer_path,
+        tokenizer=tokenizer_path,
         dtype=vllm_dtype,                 # "bfloat16" or "auto"
         tensor_parallel_size=1,
         gpu_memory_utilization=gpu_mem_util,
@@ -274,7 +273,6 @@ if __name__ == "__main__":
                         rollout_client=rollouts,
                         optimizer=optimizer,
                         tokenizer=tokenizer,
-                        sampling_params=default_sp,
                         hyperparams=hyperparams,
                         epoch_index=epoch_it,
                         tb_writer=tb_writer,
