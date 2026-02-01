@@ -12,7 +12,7 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from algorithms import evaluate_vllm, load_model_and_dataset
-from grpo import grpo_microbatch_train_step
+from grpo import compute_group_normalized_rewards, grpo_microbatch_train_step
 from math_grader import r1_zero_reward_fn
 from sft import get_response_log_probs, tokenize_prompt_and_output
 
@@ -41,6 +41,7 @@ def train_one_epoch(model,
                     rollout_client,
                     optimizer,
                     tokenizer,
+                    sampling_params_dict,
                     hyperparams,
                     epoch_index,
                     tb_writer,
@@ -62,24 +63,14 @@ def train_one_epoch(model,
     # iter(training_loader) so that we can track the batch
     # index and do some intra-epoch reporting
     for i, data in pbar:
-        breakpoint()
-        
         prompts = data["problem"]  # list[str] length = batch_size
-
-        sampling_params_dict = dict(
-            temperature=hyperparams["sampling_temperature"],
-            top_p=1.0,
-            max_tokens=hyperparams["sampling_max_tokens"],
-            stop=["</answer>"],
-            include_stop_str_in_output=True,
-            n=hyperparams.get("rollout_k", 4),   # K samples per prompt
-        )
 
         # texts[b][k]
         texts = rollout_client.generate(prompts, sampling_params_dict)
         tokenized = tokenize_prompt_and_output(data["problem"], texts, tokenizer=tokenizer)
         # Do the actual GRPO logic here
-
+        rewards = compute_group_normalized_rewards(reward_fn=reward_fn,
+                                                   rollout_responses=)
 
         if (i + 1) % gradient_accumulation_steps == 0:
             optimizer.step()
@@ -276,6 +267,7 @@ if __name__ == "__main__":
                         optimizer=optimizer,
                         tokenizer=tokenizer,
                         hyperparams=hyperparams,
+                        sampling_params_dict=default_sp,
                         epoch_index=epoch_it,
                         tb_writer=tb_writer,
                         reward_fn=r1_zero_reward_fn,
