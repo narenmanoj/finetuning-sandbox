@@ -62,6 +62,9 @@ def train_one_epoch(model,
     # index and do some intra-epoch reporting
     for i, data in pbar:
         breakpoint()
+        if (i + 1) % gradient_accumulation_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad()
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),
