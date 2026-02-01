@@ -7,16 +7,17 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from vllm import LLM, SamplingParams
+from vllm import SamplingParams
 
 from algorithms import evaluate_vllm, load_model_and_dataset
 from grpo import grpo_microbatch_train_step
+from math_grader import r1_zero_reward_fn
 from sft import get_response_log_probs, tokenize_prompt_and_output
 
 EPOCH_KEY = "epoch"
 MODEL_STATE_KEY = "model_state_dict"
 OPTIMIZER_STATE_KEY = "optimizer_state_dict"
-LOSS_KEY = "loss"
+REWARD_KEY = "reward"
 
 
 def read_json_to_dict(filename):
@@ -36,16 +37,18 @@ def read_json_to_dict(filename):
 
 def train_one_epoch(model,
                     optimizer,
+                    sampling_params,
                     hyperparams,
                     epoch_index,
                     tb_writer,
-                    loss_fn,
+                    reward_fn,
                     dataloader,
                     logdir,
                     device,
                     val_dataloader=None,
                     print_every=100):
     num_epochs = hyperparams["n_grpo_steps"]
+    gradient_accumulation_steps = hyperparams["gradient_accumulation_steps"]
     raise NotImplementedError
 
 if __name__ == "__main__":
@@ -89,6 +92,13 @@ if __name__ == "__main__":
                                   lr=opt_params["learning_rate"],
                                   betas=opt_params["betas"],
                                   weight_decay=opt_params["weight_decay"])
+    sampling_params = SamplingParams(
+        temperature=hyperparams["temperature"],
+        top_p=1.0,
+        max_tokens=hyperparams["sampling_max_tokens"],
+        stop=["</answer>"],
+        include_stop_str_in_output=True
+    )
     current_epoch = 0
     if len(args.load_checkpoint) > 0:
         checkpoint_file = f"{logdir}/{epoch_index}_checkpoint.tar"
@@ -96,8 +106,18 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint[MODEL_STATE_KEY])
         optimizer.load_state_dict(checkpoint[OPTIMIZER_STATE_KEY])
         current_epoch = checkpoint[EPOCH_KEY] + 1
-        loaded_loss = checkpoint[LOSS_KEY]
+        loaded_reward = checkpoint[REWARD_KEY]
         print(f"Resuming from beginning of epoch {current_epoch}")
-        print(f"Current loss = {loaded_loss}")
+        print(f"Current reward = {loaded_reward}")
     tb_writer = SummaryWriter(logdir)
     for epoch_it in tqdm(range(current_epoch, hyperparams["num_epochs"], 1)):
+        train_one_epoch(model=model,
+                        optimizer=optimizer,
+                        sampling_params=sampling_params,
+                        hyperparams=hyperparams,
+                        epoch_index=epoch_it,
+                        tb_writer=tb_writer,
+                        reward_fn=r1_zero_reward_fn,
+                        dataloader=train_dataloader,
+                        val_dataloader=test_dataloader,
+        )
