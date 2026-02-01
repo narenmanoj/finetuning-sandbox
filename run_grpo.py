@@ -115,7 +115,7 @@ if __name__ == "__main__":
                                   betas=opt_params["betas"],
                                   weight_decay=opt_params["weight_decay"])
     sampling_params = SamplingParams(
-        temperature=hyperparams["temperature"],
+        temperature=hyperparams["sampling_temperature"],
         top_p=1.0,
         max_tokens=hyperparams["sampling_max_tokens"],
         stop=["</answer>"],
