@@ -64,13 +64,19 @@ def train_one_epoch(model,
     # index and do some intra-epoch reporting
     for i, data in pbar:
         prompts = data["problem"]  # list[str] length = batch_size
-
+        answers = data["answer"]
         # texts[b][k]
         texts = rollout_client.generate(prompts, sampling_params_dict)
-        tokenized = tokenize_prompt_and_output(data["problem"], texts, tokenizer=tokenizer)
+        # tokenized = tokenize_prompt_and_output(data["problem"], texts, tokenizer=tokenizer)
+        breakpoint()
         # Do the actual GRPO logic here
         rewards = compute_group_normalized_rewards(reward_fn=reward_fn,
-                                                   rollout_responses=)
+                                                   rollout_responses=texts,
+                                                   repeated_ground_truths=answers,
+                                                   group_size=hyperparams["group_size"],
+                                                   advantage_eps=hyperparams["advantage_eps"],
+                                                   normalize_by_std=hyperparams["use_std_normalization"])
+        breakpoint()
 
         if (i + 1) % gradient_accumulation_steps == 0:
             optimizer.step()
