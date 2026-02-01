@@ -81,9 +81,9 @@ if __name__ == "__main__":
 
     if len(args.config) > 0:
         hyperparams = read_json_to_dict(args.config)
-        dataset_name = hyperparams["dataset_name"].split(".")[0]
+        dataset_str = hyperparams["dataset_str"].split(".")[0]
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        logdir = f"runs/{dataset_name}/{timestamp}"
+        logdir = f"runs/{dataset_str}/{timestamp}"
         config_filename = f"{logdir}/config.json"
         os.makedirs(os.path.dirname(config_filename), exist_ok=True)
         with open(config_filename, "w") as json_file:
