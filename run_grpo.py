@@ -2,6 +2,7 @@ import argparse
 from datetime import datetime
 import gc
 import json
+import multiprocessing as mp
 import os
 from pathlib import Path
 import torch
@@ -9,7 +10,6 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from vllm import LLM, SamplingParams
 
 from algorithms import evaluate_vllm, load_model_and_dataset
 from grpo import grpo_microbatch_train_step
@@ -38,7 +38,7 @@ def read_json_to_dict(filename):
         return None
 
 def train_one_epoch(model,
-                    rollout_llm,
+                    rollout_client,
                     optimizer,
                     tokenizer,
                     sampling_params,
@@ -48,6 +48,7 @@ def train_one_epoch(model,
                     reward_fn,
                     dataloader,
                     logdir,
+                    vllm_snapshot_dir,
                     device,
                     val_dataloader=None,
                     print_every=100):
@@ -63,17 +64,35 @@ def train_one_epoch(model,
     # index and do some intra-epoch reporting
     for i, data in pbar:
         breakpoint()
-        tokenized = tokenize_prompt_and_output(data["problem"], data["answer"], tokenizer=tokenizer)
+        
+        prompts = data["problem"]  # list[str] length = batch_size
+
+        sampling_params_dict = dict(
+            temperature=hyperparams["sampling_temperature"],
+            top_p=1.0,
+            max_tokens=hyperparams["sampling_max_tokens"],
+            stop=["</answer>"],
+            include_stop_str_in_output=True,
+            n=hyperparams.get("rollout_k", 4),   # K samples per prompt
+        )
+
+        # texts[b][k]
+        if rollout_client is None:
+            texts = model.generate(prompts, sampling_params_dict)
+        else:
+            texts = rollout_client.generate(prompts, sampling_params_dict)
+        tokenized = tokenize_prompt_and_output(data["problem"], texts, tokenizer=tokenizer)
+        # Do the actual GRPO logic here
+
+
         if (i + 1) % gradient_accumulation_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
             # refresh vLLM weights every optimizer step (or every N steps)
-            model.save_pretrained(vllm_ckpt_dir, safe_serialization=True)
+            model.save_pretrained(vllm_snapshot_dir, safe_serialization=True)
             # then rebuild engine (heavy but straightforward)
-            del rollout_llm
-            gc.collect()
-            torch.cuda.empty_cache()
-            rollout_llm = LLM(model=vllm_ckpt_dir, dtype="bfloat16", gpu_memory_utilization=0.6)
+            model.save_pretrained(vllm_snapshot_dir, safe_serialization=True)
+            rollout_client.reload(vllm_snapshot_dir)
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),
@@ -82,8 +101,90 @@ def train_one_epoch(model,
     }, f"{logdir}/{epoch_index}_checkpoint.tar")
     return last_reward
 
+
+
+def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, vllm_dtype: str, gpu_mem_util: float, gpu_id: int):
+    # Pin THIS process to physical GPU 1 (it becomes cuda:0 inside the process)
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    from vllm import LLM, SamplingParams
+
+    llm = LLM(
+        model=model_path_or_id,
+        dtype=vllm_dtype,                 # "bfloat16" or "auto"
+        tensor_parallel_size=1,
+        gpu_memory_utilization=gpu_mem_util,
+    )
+
+    while True:
+        msg = in_q.get()
+        if msg is None:
+            break
+
+        cmd = msg["cmd"]
+
+        if cmd == "generate":
+            prompts = msg["prompts"]
+            sp = SamplingParams(**msg["sampling_params"])
+            outputs = llm.generate(prompts, sp)
+            # outputs: len=B; each has .outputs list len=n
+            texts = [[o.text for o in req.outputs] for req in outputs]
+            out_q.put({"ok": True, "texts": texts})
+
+        elif cmd == "reload":
+            # Rebuild engine from new HF-format checkpoint dir
+            model_path_or_id = msg["model_path_or_id"]
+            del llm
+            gc.collect()
+            torch.cuda.empty_cache()
+            llm = LLM(
+                model=model_path_or_id,
+                dtype=vllm_dtype,
+                tensor_parallel_size=1,
+                gpu_memory_utilization=gpu_mem_util,
+            )
+            out_q.put({"ok": True})
+
+        else:
+            out_q.put({"ok": False, "error": f"unknown cmd: {cmd}"})
+
+
+class RolloutClient:
+    def __init__(self, model_path_or_id: str, vllm_dtype="bfloat16", gpu_mem_util=0.90):
+        ctx = mp.get_context("spawn")  # important with CUDA
+        self.in_q = ctx.Queue(maxsize=2)
+        self.out_q = ctx.Queue(maxsize=2)
+        self.proc = ctx.Process(
+            target=_vllm_worker_loop,
+            args=(self.in_q, self.out_q, model_path_or_id, vllm_dtype, gpu_mem_util),
+            daemon=True,
+        )
+        self.proc.start()
+
+    def generate(self, prompts, sampling_params_dict):
+        self.in_q.put({"cmd": "generate", "prompts": prompts, "sampling_params": sampling_params_dict})
+        resp = self.out_q.get()
+        if not resp["ok"]:
+            raise RuntimeError(resp["error"])
+        return resp["texts"]
+
+    def reload(self, model_path_or_id: str):
+        self.in_q.put({"cmd": "reload", "model_path_or_id": model_path_or_id})
+        resp = self.out_q.get()
+        if not resp["ok"]:
+            raise RuntimeError(resp["error"])
+
+    def close(self):
+        self.in_q.put(None)
+        self.proc.join(timeout=10)
+
+
 if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    mp.set_start_method("spawn", force=True)
+    num_gpus = torch.cuda.device_count()
+    use_vllm_rollouts = num_gpus >= 2
+    from vllm import SamplingParams
+    torch.cuda.set_device(0)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device = {device}")
 
     parser = argparse.ArgumentParser(description="A script that runs GRPO on Qwen with MATH dataset.")
@@ -116,22 +217,16 @@ if __name__ == "__main__":
                                                                 dtype=hyperparams["dtype"])
     model.train()
 
-    # Choose where vLLM will read weights/tokenizer/config from.
-    # This directory must contain config.json + tokenizer files + model weights.
-    vllm_ckpt_dir = f"{logdir}/vllm_ckpt"
-    os.makedirs(vllm_ckpt_dir, exist_ok=True)
 
-    # Write HF-format checkpoint (vLLM can load this).
-    tokenizer.save_pretrained(vllm_ckpt_dir)
-    model.save_pretrained(vllm_ckpt_dir, safe_serialization=True)
+    vllm_snapshot_dir = f"{logdir}/vllm_snapshot"
+    os.makedirs(vllm_snapshot_dir, exist_ok=True)
+    tokenizer.save_pretrained(vllm_snapshot_dir)
+    model.save_pretrained(vllm_snapshot_dir, safe_serialization=True)
 
-    # Create the vLLM inference engine.
-    # gpu_memory_utilization controls how much GPU memory vLLM reserves. :contentReference[oaicite:3]{index=3}
-    rollout_llm = LLM(
-        model=vllm_ckpt_dir,
-        dtype=hyperparams["dtype"],
-        gpu_memory_utilization=hyperparams["gpu_memory_utilization"],
-    )
+    if use_vllm_rollouts:
+        rollouts = RolloutClient(model_path_or_id=vllm_snapshot_dir, vllm_dtype=hyperparams["dtype"])
+    else:
+        rollouts = None
 
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=hyperparams["train_batch_size"],
@@ -164,7 +259,7 @@ if __name__ == "__main__":
     tb_writer = SummaryWriter(logdir)
     for epoch_it in tqdm(range(current_epoch, hyperparams["n_grpo_steps"], 1)):
         train_one_epoch(model=model,
-                        rollout_llm=rollout_llm,
+                        rollout_client=rollouts,
                         optimizer=optimizer,
                         tokenizer=tokenizer,
                         sampling_params=sampling_params,
@@ -176,6 +271,8 @@ if __name__ == "__main__":
                         val_dataloader=test_dataloader,
                         device=device,
                         logdir=logdir,
+                        vllm_snapshot_dir=vllm_snapshot_dir,
         )
+    rollouts.close()
     del model
     gc.collect()
