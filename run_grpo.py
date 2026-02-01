@@ -69,6 +69,7 @@ def train_one_epoch(model,
         # texts[b][k]
         texts = rollout_client.generate(prompts, sampling_params_dict)
         texts_flattened = list(itertools.chain.from_iterable(texts))
+        answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
         # Do the actual GRPO logic here
         breakpoint()
         rewards = compute_group_normalized_rewards(reward_fn=reward_fn,
