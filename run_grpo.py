@@ -235,7 +235,7 @@ if __name__ == "__main__":
         max_tokens=hyperparams["sampling_max_tokens"],
         stop=["</answer>"],
         include_stop_str_in_output=True,
-        n=hyperparams.get("rollout_k", 4),
+        n=hyperparams["group_size"],
     )
     rollouts = RolloutClient(model_path_or_id=vllm_snapshot_dir,
                              tokenizer_path=vllm_snapshot_dir,
@@ -245,10 +245,10 @@ if __name__ == "__main__":
                              gpu_id=num_gpus - 1)
 
     train_dataloader = DataLoader(train_dataset,
-                                  batch_size=hyperparams["train_batch_size"],
+                                  batch_size=hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"],
                                   shuffle=True)
     test_dataloader = DataLoader(test_dataset,
-                                 batch_size=hyperparams["train_batch_size"],
+                                 batch_size=hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"],
                                  shuffle=True)
     opt_params = hyperparams["optimizer_params"]
     optimizer = torch.optim.AdamW(model.parameters(),
