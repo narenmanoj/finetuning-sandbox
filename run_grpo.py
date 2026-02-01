@@ -77,10 +77,7 @@ def train_one_epoch(model,
         )
 
         # texts[b][k]
-        if rollout_client is None:
-            texts = model.generate(prompts, sampling_params_dict)
-        else:
-            texts = rollout_client.generate(prompts, sampling_params_dict)
+        texts = rollout_client.generate(prompts, sampling_params_dict)
         tokenized = tokenize_prompt_and_output(data["problem"], texts, tokenizer=tokenizer)
         # Do the actual GRPO logic here
 
@@ -92,7 +89,8 @@ def train_one_epoch(model,
             step_dir = f"{vllm_snapshot_dir}/step_{epoch_index}_{i}"
             os.makedirs(step_dir, exist_ok=True)
             model.save_pretrained(step_dir, safe_serialization=True)
-            rollout_client.reload(vllm_snapshot_dir)
+            rollout_client.reload(step_dir)
+
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),
@@ -103,9 +101,8 @@ def train_one_epoch(model,
 
 
 
-def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, vllm_dtype: str, gpu_mem_util: float, gpu_id: int):
+def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, tokenizer_path: str, vllm_dtype: str, gpu_mem_util: float):
     # Pin THIS process to physical GPU 1 (it becomes cuda:0 inside the process)
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     from vllm import LLM, SamplingParams
 
     llm = LLM(
@@ -138,6 +135,7 @@ def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, vllm_dtype: str, gpu_m
             torch.cuda.empty_cache()
             llm = LLM(
                 model=model_path_or_id,
+                tokenizer=tokenizer_path,
                 dtype=vllm_dtype,
                 tensor_parallel_size=1,
                 gpu_memory_utilization=gpu_mem_util,
@@ -149,16 +147,23 @@ def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, vllm_dtype: str, gpu_m
 
 
 class RolloutClient:
-    def __init__(self, model_path_or_id: str, vllm_dtype="bfloat16", gpu_mem_util=0.90, gpu_id=1):
+    def __init__(self, model_path_or_id: str, tokenizer_path: str, vllm_dtype="bfloat16", gpu_mem_util=0.90, gpu_id=1):
         ctx = mp.get_context("spawn")  # important with CUDA
         self.in_q = ctx.Queue(maxsize=2)
         self.out_q = ctx.Queue(maxsize=2)
         self.proc = ctx.Process(
             target=_vllm_worker_loop,
-            args=(self.in_q, self.out_q, model_path_or_id, vllm_dtype, gpu_mem_util, gpu_id),
+            args=(self.in_q, self.out_q, model_path_or_id, tokenizer_path, vllm_dtype, gpu_mem_util, gpu_id),
             daemon=True,
         )
+        old_cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
         self.proc.start()
+        if old_cvd is None:
+            del os.environ["CUDA_VISIBLE_DEVICES"]
+        else:
+            os.environ["CUDA_VISIBLE_DEVICES"] = old_cvd
+
 
     def generate(self, prompts, sampling_params_dict):
         self.in_q.put({"cmd": "generate", "prompts": prompts, "sampling_params": sampling_params_dict})
@@ -182,7 +187,7 @@ if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
     num_gpus = torch.cuda.device_count()
     use_vllm_rollouts = num_gpus >= 2
-    assert use_vllm_rollouts, "This will not work properly with \le 2 GPUs"
+    assert use_vllm_rollouts, "This will not work properly with fewer than 2 GPUs"
     from vllm import SamplingParams
     torch.cuda.set_device(0)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -224,7 +229,11 @@ if __name__ == "__main__":
     tokenizer.save_pretrained(vllm_snapshot_dir)
     model.save_pretrained(vllm_snapshot_dir, safe_serialization=True)
 
-    rollouts = RolloutClient(model_path_or_id=vllm_snapshot_dir, vllm_dtype=hyperparams["dtype"], gpu_mem_util=hyperparams["gpu_memory_utilization"], gpu_id=num_gpus - 1)
+    rollouts = RolloutClient(model_path_or_id=vllm_snapshot_dir,
+                             tokenizer_path=vllm_snapshot_dir,
+                             vllm_dtype=hyperparams["dtype"],
+                             gpu_mem_util=hyperparams["gpu_memory_utilization"],
+                             gpu_id=num_gpus - 1)
 
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=hyperparams["train_batch_size"],
