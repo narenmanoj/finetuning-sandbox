@@ -89,9 +89,10 @@ def train_one_epoch(model,
             optimizer.step()
             optimizer.zero_grad()
             # refresh vLLM weights every optimizer step (or every N steps)
-            model.save_pretrained(vllm_snapshot_dir, safe_serialization=True)
-            if rollout_client is not None:
-                rollout_client.reload(vllm_snapshot_dir)
+            step_dir = f"{vllm_snapshot_dir}/step_{epoch_index}_{i}"
+            os.makedirs(step_dir, exist_ok=True)
+            model.save_pretrained(step_dir, safe_serialization=True)
+            rollout_client.reload(vllm_snapshot_dir)
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),
@@ -181,6 +182,7 @@ if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
     num_gpus = torch.cuda.device_count()
     use_vllm_rollouts = num_gpus >= 2
+    assert use_vllm_rollouts, "This will not work properly with \le 2 GPUs"
     from vllm import SamplingParams
     torch.cuda.set_device(0)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -222,10 +224,7 @@ if __name__ == "__main__":
     tokenizer.save_pretrained(vllm_snapshot_dir)
     model.save_pretrained(vllm_snapshot_dir, safe_serialization=True)
 
-    if use_vllm_rollouts:
-        rollouts = RolloutClient(model_path_or_id=vllm_snapshot_dir, vllm_dtype=hyperparams["dtype"], gpu_mem_util=hyperparams["gpu_memory_utilization"], gpu_id=num_gpus - 1)
-    else:
-        rollouts = None
+    rollouts = RolloutClient(model_path_or_id=vllm_snapshot_dir, vllm_dtype=hyperparams["dtype"], gpu_mem_util=hyperparams["gpu_memory_utilization"], gpu_id=num_gpus - 1)
 
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=hyperparams["train_batch_size"],
