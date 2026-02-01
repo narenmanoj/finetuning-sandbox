@@ -100,13 +100,13 @@ def train_one_epoch(model,
     return last_reward
 
 
-
-def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, tokenizer_path: str, vllm_dtype: str, gpu_mem_util: float):
+def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, tokenizer_path: str, default_sampling_params: dict, vllm_dtype: str, gpu_mem_util: float):
     # Pin THIS process to physical GPU 1 (it becomes cuda:0 inside the process)
     from vllm import LLM, SamplingParams
 
     llm = LLM(
         model=model_path_or_id,
+        tokenizer_path=tokenizer_path,
         dtype=vllm_dtype,                 # "bfloat16" or "auto"
         tensor_parallel_size=1,
         gpu_memory_utilization=gpu_mem_util,
@@ -121,7 +121,10 @@ def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, tokenizer_path: str, v
 
         if cmd == "generate":
             prompts = msg["prompts"]
-            sp = SamplingParams(**msg["sampling_params"])
+            sp_dict = dict(default_sampling_params)
+            sp_dict.update(msg.get("sampling_params", {}))
+
+            sp = SamplingParams(**sp_dict)
             outputs = llm.generate(prompts, sp)
             # outputs: len=B; each has .outputs list len=n
             texts = [[o.text for o in req.outputs] for req in outputs]
@@ -147,13 +150,13 @@ def _vllm_worker_loop(in_q, out_q, model_path_or_id: str, tokenizer_path: str, v
 
 
 class RolloutClient:
-    def __init__(self, model_path_or_id: str, tokenizer_path: str, vllm_dtype="bfloat16", gpu_mem_util=0.90, gpu_id=1):
+    def __init__(self, model_path_or_id: str, tokenizer_path: str, default_sampling_params: dict, vllm_dtype: str="bfloat16", gpu_mem_util=0.90, gpu_id=1):
         ctx = mp.get_context("spawn")  # important with CUDA
         self.in_q = ctx.Queue(maxsize=2)
         self.out_q = ctx.Queue(maxsize=2)
         self.proc = ctx.Process(
             target=_vllm_worker_loop,
-            args=(self.in_q, self.out_q, model_path_or_id, tokenizer_path, vllm_dtype, gpu_mem_util, gpu_id),
+            args=(self.in_q, self.out_q, model_path_or_id, tokenizer_path, default_sampling_params, vllm_dtype, gpu_mem_util),
             daemon=True,
         )
         old_cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
@@ -188,7 +191,7 @@ if __name__ == "__main__":
     num_gpus = torch.cuda.device_count()
     use_vllm_rollouts = num_gpus >= 2
     assert use_vllm_rollouts, "This will not work properly with fewer than 2 GPUs"
-    from vllm import SamplingParams
+    # from vllm import SamplingParams
     torch.cuda.set_device(0)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device = {device}")
@@ -228,9 +231,17 @@ if __name__ == "__main__":
     os.makedirs(vllm_snapshot_dir, exist_ok=True)
     tokenizer.save_pretrained(vllm_snapshot_dir)
     model.save_pretrained(vllm_snapshot_dir, safe_serialization=True)
-
+    default_sp = dict(
+        temperature=hyperparams["sampling_temperature"],
+        top_p=1.0,
+        max_tokens=hyperparams["sampling_max_tokens"],
+        stop=["</answer>"],
+        include_stop_str_in_output=True,
+        n=hyperparams.get("rollout_k", 4),
+    )
     rollouts = RolloutClient(model_path_or_id=vllm_snapshot_dir,
                              tokenizer_path=vllm_snapshot_dir,
+                             default_sampling_params=default_sp,
                              vllm_dtype=hyperparams["dtype"],
                              gpu_mem_util=hyperparams["gpu_memory_utilization"],
                              gpu_id=num_gpus - 1)
@@ -246,13 +257,7 @@ if __name__ == "__main__":
                                   lr=opt_params["learning_rate"],
                                   betas=opt_params["betas"],
                                   weight_decay=opt_params["weight_decay"])
-    sampling_params = SamplingParams(
-        temperature=hyperparams["sampling_temperature"],
-        top_p=1.0,
-        max_tokens=hyperparams["sampling_max_tokens"],
-        stop=["</answer>"],
-        include_stop_str_in_output=True
-    )
+    
     current_epoch = 0
     if len(args.load_checkpoint) > 0:
         checkpoint_file = f"{logdir}/{epoch_index}_checkpoint.tar"
@@ -269,7 +274,7 @@ if __name__ == "__main__":
                         rollout_client=rollouts,
                         optimizer=optimizer,
                         tokenizer=tokenizer,
-                        sampling_params=sampling_params,
+                        sampling_params=default_sp,
                         hyperparams=hyperparams,
                         epoch_index=epoch_it,
                         tb_writer=tb_writer,
