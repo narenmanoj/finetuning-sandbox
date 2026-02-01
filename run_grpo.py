@@ -74,7 +74,7 @@ def train_one_epoch(model,
         breakpoint()
         rewards = compute_group_normalized_rewards(reward_fn=reward_fn,
                                                    rollout_responses=texts_flattened,
-                                                   repeated_ground_truths=answers,
+                                                   repeated_ground_truths=answers_flattened,
                                                    group_size=hyperparams["group_size"],
                                                    advantage_eps=hyperparams["advantage_eps"],
                                                    normalize_by_std=hyperparams["use_std_normalization"])
