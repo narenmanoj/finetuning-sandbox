@@ -47,9 +47,17 @@ def train_one_epoch(model,
                     device,
                     val_dataloader=None,
                     print_every=100):
+    running_reward = 0.0
+    last_reward = 0.0
     num_epochs = hyperparams["n_grpo_steps"]
     gradient_accumulation_steps = hyperparams["gradient_accumulation_steps"]
-    raise NotImplementedError
+    torch.save({
+        EPOCH_KEY: epoch_index,
+        MODEL_STATE_KEY: model.state_dict(),
+        OPTIMIZER_STATE_KEY: optimizer.state_dict(),
+        REWARD_KEY: last_reward,
+    }, f"{logdir}/{epoch_index}_checkpoint.tar")
+    return last_reward
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
