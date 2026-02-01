@@ -110,7 +110,7 @@ if __name__ == "__main__":
                                  batch_size=hyperparams["train_batch_size"],
                                  shuffle=True)
     opt_params = hyperparams["optimizer_params"]
-    optimizer = torch.optim.AdamW(model.params(),
+    optimizer = torch.optim.AdamW(model.parameters(),
                                   lr=opt_params["learning_rate"],
                                   betas=opt_params["betas"],
                                   weight_decay=opt_params["weight_decay"])
