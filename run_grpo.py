@@ -58,7 +58,7 @@ def train_one_epoch(model,
     microbatch_size = hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"]
     pbar = tqdm(enumerate(dataloader), total=len(dataloader), 
                 desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=True)
-
+    n_microbatches = hyperparams["train_batch_size"] // microbatch_size
     for i, data in pbar:
         prompts = data["problem"]  # list[str] length = batch_size
         answers = data["answer"]
@@ -68,12 +68,12 @@ def train_one_epoch(model,
         tokenized = tokenize_prompt_and_output(prompt_strs=texts_flattened, output_strs=answers_flattened, tokenizer=tokenizer)
         input_ids = tokenized["input_ids"]
         labels = tokenized["labels"]
-        # Do the actual GRPO logic here
         n_train_steps = hyperparams["epochs_per_rollout_batch"] * (len(texts_flattened) // hyperparams["train_batch_size"])
-        for j in range(n_microbatches):
+        for j in range(n_train_steps):
             macrobatch_start = hyperparams["train_batch_size"] * j
             macrobatch_end = hyperparams["train_batch_size"] * (j + 1)
-            n_microbatches = hyperparams["train_batch_size"] // microbatch_size
+            input_ids_macrobatch = input_ids[macrobatch_start: macrobatch_end]
+            labels_macrobatch = input_ids[macrobatch_start: macrobatch_end]
             old_log_probs_dict = get_response_log_probs(model=model,
                                                         input_ids=input_ids_microbatch,
                                                         labels=labels_microbatch,
@@ -81,7 +81,7 @@ def train_one_epoch(model,
                                                         with_grad=False,
                                                         device=device)
             old_log_probs = old_log_probs_dict["log_probs"]
-            for k in range(n_train_steps): # n_train_steps
+            for k in range(n_microbatches): # n_train_steps
                 microbatch_start = macrobatch_start + microbatch_size * k * hyperparams["group_size"]
                 microbatch_end = macrobatch_start + microbatch_size * (k + 1) * hyperparams["group_size"]
                 texts_microbatch = texts_flattened[microbatch_start: microbatch_end]
