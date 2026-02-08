@@ -78,20 +78,26 @@ def train_one_epoch(model,
                                                    group_size=hyperparams["group_size"],
                                                    advantage_eps=hyperparams["advantage_eps"],
                                                    normalize_by_std=hyperparams["use_std_normalization"])
-        old_log_probs = get_response_log_probs(model=model, input_ids=tokenized["input_ids"], labels=tokenized["labels"], return_token_entropy=True)
-        loss_dict = grpo_microbatch_train_step(policy_log_probs=policy_log_probs,
-                                               response_mask=tokenized["response_mask"],
-                                               gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
-                                               loss_type=hyperparams["loss_type"],
-                                               raw_rewards=rewards,
-                                               advantages=advantages,
-                                               old_log_probs=old_log_probs,
-                                               cliprange=hyperparams["cliprange"])
-        breakpoint()
+        old_log_probs_dict = get_response_log_probs(model=model,
+                                                    input_ids=tokenized["input_ids"],
+                                                    labels=tokenized["labels"],
+                                                    return_token_entropy=True,
+                                                    with_grad=False)
+        old_log_probs = old_log_probs_dict["log_probs"]
+        for j in range(hyperparams["n_grpo_steps"]):
+            loss_dict = grpo_microbatch_train_step(policy_log_probs=policy_log_probs,
+                                                   response_mask=tokenized["response_mask"],
+                                                   gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
+                                                   loss_type=hyperparams["loss_type"],
+                                                   raw_rewards=rewards,
+                                                   advantages=advantages,
+                                                   old_log_probs=old_log_probs,
+                                                   cliprange=hyperparams["cliprange"])
+            breakpoint()
 
-        if (i + 1) % gradient_accumulation_steps == 0:
-            optimizer.step()
-            optimizer.zero_grad()
+            if (j + 1) % gradient_accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad()
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),

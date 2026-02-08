@@ -40,13 +40,11 @@ def load_model_and_dataset(model_str, dataset_str, prompt=None, dtype="float16",
     if prompt is not None:
         with open(prompt, "r") as f:
             base_prompt = f.read()
-    # llm = LLM(model=model_str, dtype=dtype)
     model = AutoModelForCausalLM.from_pretrained(
         model_str,
         torch_dtype=dtype,
         device_map=device,
     )
-    # tokenizer = AutoTokenizer.from_pretrained(model_str)
     math_dataset = load_dataset(dataset_str)
     train_dataset = format_dataset(base_prompt, math_dataset["train"])
     test_dataset = format_dataset(base_prompt, math_dataset["test"])

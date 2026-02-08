@@ -43,13 +43,19 @@ def get_response_log_probs(
     input_ids: torch.Tensor,
     labels: torch.Tensor,
     return_token_entropy: bool = False,
+    with_grad: bool = True,
 ) -> dict[str, torch.Tensor]:
-    logits = model(input_ids).logits
-    token_entropy = compute_entropy(logits) if return_token_entropy else None
-    logp = logits - torch.logsumexp(logits, dim=-1).unsqueeze(-1)
-    log_probs = torch.gather(logp, dim=-1, index=labels.unsqueeze(-1)).squeeze(-1)
-    return {"log_probs": log_probs,
-            "token_entropy": token_entropy}
+    def _get_response_log_probs_inner(model, input_ids, labels, return_token_entropy):
+        logits = model(input_ids).logits
+        token_entropy = compute_entropy(logits) if return_token_entropy else None
+        logp = logits - torch.logsumexp(logits, dim=-1).unsqueeze(-1)
+        log_probs = torch.gather(logp, dim=-1, index=labels.unsqueeze(-1)).squeeze(-1)
+        return {"log_probs": log_probs,
+                "token_entropy": token_entropy}
+    if with_grad:
+        return _get_response_log_probs_inner(model, input_ids, labels, return_token_entropy)
+    with torch.no_grad():
+        return _get_response_log_probs_inner(model, input_ids, labels, return_token_entropy)
 
 
 def masked_normalize(
