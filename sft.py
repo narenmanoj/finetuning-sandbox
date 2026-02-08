@@ -51,7 +51,7 @@ def get_response_log_probs(
         logits = model(input_ids.to(device)).logits
         token_entropy = compute_entropy(logits) if return_token_entropy else None
         logp = logits - torch.logsumexp(logits, dim=-1).unsqueeze(-1)
-        log_probs = torch.gather(logp, dim=-1, index=labels.unsqueeze(-1)).squeeze(-1)
+        log_probs = torch.gather(logp, dim=-1, index=labels.to(device).unsqueeze(-1)).squeeze(-1)
         return {"log_probs": log_probs,
                 "token_entropy": token_entropy}
 
