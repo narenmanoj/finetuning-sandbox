@@ -60,12 +60,13 @@ def train_one_epoch(model,
                 desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=True)
     n_microbatches = hyperparams["train_batch_size"] // microbatch_size
     for i, data in pbar:
-        prompts = data["problem"]  # list[str] length = batch_size
+        prompts = data["problem"]
         answers = data["answer"]
         texts = rollout_client.generate(prompts, sampling_params_dict)
         texts_flattened = list(itertools.chain.from_iterable(texts))
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
-        tokenized = tokenize_prompt_and_output(prompt_strs=texts_flattened, output_strs=answers_flattened, tokenizer=tokenizer)
+        breakpoint()
+        tokenized = tokenize_prompt_and_output(prompt_strs=prompts_flattened, output_strs=texts_flattened, tokenizer=tokenizer)
         input_ids = tokenized["input_ids"]
         labels = tokenized["labels"]
         n_train_steps = hyperparams["epochs_per_rollout_batch"] * (len(texts_flattened) // hyperparams["train_batch_size"])
