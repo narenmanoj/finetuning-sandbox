@@ -52,7 +52,6 @@ def train_one_epoch(model,
                     device,
                     val_dataloader=None,
                     print_every=100):
-    running_reward = 0.0
     last_reward = 0.0
     num_epochs = hyperparams["n_grpo_steps"]
     microbatch_size = hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"]
@@ -64,14 +63,12 @@ def train_one_epoch(model,
         answers = data["answer"]
         texts = rollout_client.generate(prompts, sampling_params_dict)
         texts_flattened = list(itertools.chain.from_iterable(texts))
-        num_examples = len(texts_flattened)
         prompts_flattened = [s for s in prompts for _ in range(hyperparams["group_size"])]
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
         breakpoint()
         tokenized = tokenize_prompt_and_output(prompt_strs=prompts_flattened, output_strs=texts_flattened, tokenizer=tokenizer)
         input_ids = tokenized["input_ids"]
         labels = tokenized["labels"]
-        n_train_steps = hyperparams["epochs_per_rollout_batch"] * (num_examples // hyperparams["train_batch_size"])
         rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
                                                         rollout_responses=texts_microbatch,
                                                         repeated_ground_truths=answers_microbatch,
@@ -80,15 +77,15 @@ def train_one_epoch(model,
                                                         normalize_by_std=hyperparams["use_std_normalization"])
         raw_rewards = rewards_dict[1]
         advantages = rewards_dict[0]
-        for j in range(n_train_steps):
-            old_log_probs_dict = get_response_log_probs(model=model,
-                                                        input_ids=input_ids_microbatch,
-                                                        labels=labels_microbatch,
-                                                        return_token_entropy=True,
-                                                        with_grad=False,
-                                                        device=device)
-            old_log_probs = old_log_probs_dict["log_probs"]
-            
+        last_reward = torch.mean(raw_rewards)
+        old_log_probs_dict = get_response_log_probs(model=model,
+                                                    input_ids=input_ids,
+                                                    labels=labels,
+                                                    return_token_entropy=True,
+                                                    with_grad=False,
+                                                    device=device)
+        old_log_probs = old_log_probs_dict["log_probs"]
+        for j in range(hyperparams["epochs_per_rollout_batch"]):
             for k in range(n_microbatches): # n_train_steps
                 microbatch_start = microbatch_size * k * hyperparams["group_size"]
                 microbatch_end = microbatch_size * (k + 1) * hyperparams["group_size"]
