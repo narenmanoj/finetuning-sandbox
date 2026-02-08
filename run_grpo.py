@@ -71,7 +71,7 @@ def train_one_epoch(model,
         labels = tokenized["labels"]
         response_mask = tokenized["response_mask"]
         rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
-                                                        rollout_responses=texts_microbatch,
+                                                        rollout_responses=texts_flattened,
                                                         repeated_ground_truths=answers_flattened,
                                                         group_size=hyperparams["group_size"],
                                                         advantage_eps=hyperparams["advantage_eps"],
@@ -92,7 +92,6 @@ def train_one_epoch(model,
                 microbatch_end = microbatch_size * (k + 1) * hyperparams["group_size"]
                 input_ids_microbatch = input_ids[microbatch_start: microbatch_end]
                 labels_microbatch = labels[microbatch_start: microbatch_end]
-                texts_microbatch = texts_flattened[microbatch_start: microbatch_end]
                 old_log_probs_microbatch = old_log_probs[microbatch_start: microbatch_end]
                 raw_rewards_microbatch = raw_rewards[microbatch_start: microbatch_end]
                 advantages_microbatch = advantages[microbatch_start: microbatch_end]
@@ -105,7 +104,7 @@ def train_one_epoch(model,
                                                         with_grad=True)
                 policy_log_probs = log_probs_dict["log_probs"]
                 loss_dict = grpo_microbatch_train_step(policy_log_probs=policy_log_probs,
-                                                       response_mask=tokenized["response_mask"],
+                                                       response_mask=response_mask_microbatch,
                                                        gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
                                                        loss_type=hyperparams["loss_type"],
                                                        raw_rewards=raw_rewards_microbatch,
