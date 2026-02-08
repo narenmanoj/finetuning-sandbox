@@ -79,7 +79,8 @@ def train_one_epoch(model,
                                                     input_ids=tokenized["input_ids"],
                                                     labels=tokenized["labels"],
                                                     return_token_entropy=True,
-                                                    with_grad=False)
+                                                    with_grad=False,
+                                                    device=device)
         old_log_probs = old_log_probs_dict["log_probs"]
         for j in range(hyperparams["n_train_steps_per_rollout_batch"]):
             for k in range(microbatch_size):

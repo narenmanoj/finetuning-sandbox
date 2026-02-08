@@ -44,10 +44,11 @@ def get_response_log_probs(
     labels: torch.Tensor,
     return_token_entropy: bool = False,
     with_grad: bool = True,
+    device=None,
 ) -> dict[str, torch.Tensor]:
     ctx_mgr = torch.enable_grad if with_grad else torch.no_grad
     with ctx_mgr():
-        logits = model(input_ids).logits
+        logits = model(input_ids.to_device(device)).logits
         token_entropy = compute_entropy(logits) if return_token_entropy else None
         logp = logits - torch.logsumexp(logits, dim=-1).unsqueeze(-1)
         log_probs = torch.gather(logp, dim=-1, index=labels.unsqueeze(-1)).squeeze(-1)
