@@ -56,6 +56,7 @@ def train_one_epoch(model,
     last_reward = 0.0
     num_epochs = hyperparams["n_grpo_steps"]
     gradient_accumulation_steps = hyperparams["gradient_accumulation_steps"]
+    microbatch_size = hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"]
     pbar = tqdm(enumerate(dataloader), total=len(dataloader), 
                 desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=True)
 
@@ -256,10 +257,10 @@ if __name__ == "__main__":
                              gpu_id=num_gpus - 1)
 
     train_dataloader = DataLoader(train_dataset,
-                                  batch_size=hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"],
+                                  batch_size=hyperparams["rollout_batch_size"],
                                   shuffle=True)
     test_dataloader = DataLoader(test_dataset,
-                                 batch_size=hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"],
+                                 batch_size=hyperparams["rollout_batch_size"],
                                  shuffle=True)
     opt_params = hyperparams["optimizer_params"]
     optimizer = torch.optim.AdamW(model.parameters(),
