@@ -69,6 +69,7 @@ def train_one_epoch(model,
         texts = rollout_client.generate(prompts, sampling_params_dict)
         texts_flattened = list(itertools.chain.from_iterable(texts))
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
+        tokenized = tokenize_prompt_and_output(prompt_strs=texts_flattened, output_strs=answers_flattened, tokenizer=tokenizer)
         # Do the actual GRPO logic here
         breakpoint()
         rewards = compute_group_normalized_rewards(reward_fn=reward_fn,
@@ -77,8 +78,9 @@ def train_one_epoch(model,
                                                    group_size=hyperparams["group_size"],
                                                    advantage_eps=hyperparams["advantage_eps"],
                                                    normalize_by_std=hyperparams["use_std_normalization"])
+        old_log_probs = get_response_log_probs(model=model, input_ids=tokenized["input_ids"], labels=tokenized["labels"], return_token_entropy=True)
         loss_dict = grpo_microbatch_train_step(policy_log_probs=policy_log_probs,
-                                               response_mask=response_mask,
+                                               response_mask=tokenized["response_mask"],
                                                gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
                                                loss_type=hyperparams["loss_type"],
                                                raw_rewards=rewards,
