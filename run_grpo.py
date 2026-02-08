@@ -67,8 +67,8 @@ def train_one_epoch(model,
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
         tokenized = tokenize_prompt_and_output(prompt_strs=texts_flattened, output_strs=answers_flattened, tokenizer=tokenizer)
         # Do the actual GRPO logic here
-        
-        for j in range(hyperparams["n_train_steps_per_rollout_batch"]):
+        n_train_steps = hyperparams["epochs_per_rollout_batch"] * (len(texts_flattened) // hyperparams["train_batch_size"])
+        for j in range(n_train_steps):
             for k in range(microbatch_size):
                 breakpoint()
                 rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
