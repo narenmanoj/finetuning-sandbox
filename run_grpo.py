@@ -55,24 +55,18 @@ def train_one_epoch(model,
     running_reward = 0.0
     last_reward = 0.0
     num_epochs = hyperparams["n_grpo_steps"]
-    gradient_accumulation_steps = hyperparams["gradient_accumulation_steps"]
     microbatch_size = hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"]
     pbar = tqdm(enumerate(dataloader), total=len(dataloader), 
                 desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=True)
 
-    # Here, we use enumerate(training_loader) instead of
-    # iter(training_loader) so that we can track the batch
-    # index and do some intra-epoch reporting
     for i, data in pbar:
         prompts = data["problem"]  # list[str] length = batch_size
         answers = data["answer"]
-        # texts[b][k]
         texts = rollout_client.generate(prompts, sampling_params_dict)
         texts_flattened = list(itertools.chain.from_iterable(texts))
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
         tokenized = tokenize_prompt_and_output(prompt_strs=texts_flattened, output_strs=answers_flattened, tokenizer=tokenizer)
         # Do the actual GRPO logic here
-        breakpoint()
         rewards = compute_group_normalized_rewards(reward_fn=reward_fn,
                                                    rollout_responses=texts_flattened,
                                                    repeated_ground_truths=answers_flattened,
@@ -86,19 +80,19 @@ def train_one_epoch(model,
                                                     with_grad=False)
         old_log_probs = old_log_probs_dict["log_probs"]
         for j in range(hyperparams["n_train_steps_per_rollout_batch"]):
-            loss_dict = grpo_microbatch_train_step(policy_log_probs=policy_log_probs,
-                                                   response_mask=tokenized["response_mask"],
-                                                   gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
-                                                   loss_type=hyperparams["loss_type"],
-                                                   raw_rewards=rewards,
-                                                   advantages=advantages,
-                                                   old_log_probs=old_log_probs,
-                                                   cliprange=hyperparams["cliprange"])
-            breakpoint()
+            for k in range(microbatch_size):
+                loss_dict = grpo_microbatch_train_step(policy_log_probs=policy_log_probs,
+                                                       response_mask=tokenized["response_mask"],
+                                                       gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
+                                                       loss_type=hyperparams["loss_type"],
+                                                       raw_rewards=rewards,
+                                                       advantages=advantages,
+                                                       old_log_probs=old_log_probs,
+                                                       cliprange=hyperparams["cliprange"])
+                breakpoint()
 
-            if (j + 1) % gradient_accumulation_steps == 0:
-                optimizer.step()
-                optimizer.zero_grad()
+            optimizer.step()
+            optimizer.zero_grad()
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),
