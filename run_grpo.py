@@ -69,7 +69,11 @@ def train_one_epoch(model,
         # Do the actual GRPO logic here
         n_train_steps = hyperparams["epochs_per_rollout_batch"] * (len(texts_flattened) // hyperparams["train_batch_size"])
         for j in range(n_train_steps):
+            macrobatch_start = hyperparams["train_batch_size"] * j
+            macrobatch_end = hyperparams["train_batch_size"] * (j + 1)
             for k in range(microbatch_size):
+                microbatch_start = macrobatch_start + microbatch_size * k
+                microbatch_end = macrobatch_start + microbatch_size * (k + 1)
                 breakpoint()
                 rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
                                                                 rollout_responses=texts_flattened,
