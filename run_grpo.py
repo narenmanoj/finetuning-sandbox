@@ -69,9 +69,10 @@ def train_one_epoch(model,
         tokenized = tokenize_prompt_and_output(prompt_strs=prompts_flattened, output_strs=texts_flattened, tokenizer=tokenizer)
         input_ids = tokenized["input_ids"]
         labels = tokenized["labels"]
+        response_mask = tokenized["response_mask"]
         rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
                                                         rollout_responses=texts_microbatch,
-                                                        repeated_ground_truths=answers_microbatch,
+                                                        repeated_ground_truths=answers_flattened,
                                                         group_size=hyperparams["group_size"],
                                                         advantage_eps=hyperparams["advantage_eps"],
                                                         normalize_by_std=hyperparams["use_std_normalization"])
@@ -92,7 +93,10 @@ def train_one_epoch(model,
                 input_ids_microbatch = input_ids[microbatch_start: microbatch_end]
                 labels_microbatch = labels[microbatch_start: microbatch_end]
                 texts_microbatch = texts_flattened[microbatch_start: microbatch_end]
-                answers_microbatch = answers_flattened[microbatch_start: microbatch_end]
+                old_log_probs_microbatch = old_log_probs[microbatch_start: microbatch_end]
+                raw_rewards_microbatch = raw_rewards[microbatch_start: microbatch_end]
+                advantages_microbatch = advantages[microbatch_start: microbatch_end]
+                response_mask_microbatch = response_mask[microbatch_start: microbatch_end]
                 breakpoint()
                 log_probs_dict = get_response_log_probs(model=model,
                                                         input_ids=input_ids_microbatch,
@@ -104,9 +108,9 @@ def train_one_epoch(model,
                                                        response_mask=tokenized["response_mask"],
                                                        gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
                                                        loss_type=hyperparams["loss_type"],
-                                                       raw_rewards=raw_rewards,
-                                                       advantages=advantages,
-                                                       old_log_probs=old_log_probs,
+                                                       raw_rewards=raw_rewards_microbatch,
+                                                       advantages=advantages_microbatch,
+                                                       old_log_probs=old_log_probs_microbatch,
                                                        cliprange=hyperparams["cliprange"])
                 breakpoint()
                 if (k + 1) % hyperparams["gradient_accumulation_steps"] == 0:
