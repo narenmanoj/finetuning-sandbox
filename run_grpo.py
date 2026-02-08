@@ -70,24 +70,25 @@ def train_one_epoch(model,
         labels = tokenized["labels"]
         # Do the actual GRPO logic here
         n_train_steps = hyperparams["epochs_per_rollout_batch"] * (len(texts_flattened) // hyperparams["train_batch_size"])
-        for j in range(n_train_steps):
+        for j in range(n_microbatches):
             macrobatch_start = hyperparams["train_batch_size"] * j
             macrobatch_end = hyperparams["train_batch_size"] * (j + 1)
             n_microbatches = hyperparams["train_batch_size"] // microbatch_size
-            for k in range(n_microbatches):
-                microbatch_start = macrobatch_start + n_microbatches * k * hyperparams["group_size"]
-                microbatch_end = macrobatch_start + n_microbatches * (k + 1) * hyperparams["group_size"]
+            old_log_probs_dict = get_response_log_probs(model=model,
+                                                        input_ids=input_ids_microbatch,
+                                                        labels=labels_microbatch,
+                                                        return_token_entropy=True,
+                                                        with_grad=False,
+                                                        device=device)
+            old_log_probs = old_log_probs_dict["log_probs"]
+            for k in range(n_train_steps): # n_train_steps
+                microbatch_start = macrobatch_start + microbatch_size * k * hyperparams["group_size"]
+                microbatch_end = macrobatch_start + microbatch_size * (k + 1) * hyperparams["group_size"]
                 texts_microbatch = texts_flattened[microbatch_start: microbatch_end]
                 answers_microbatch = answers_flattened[microbatch_start: microbatch_end]
                 input_ids_microbatch = input_ids[microbatch_start: microbatch_end]
                 labels_microbatch = labels[microbatch_start: microbatch_end]
-                old_log_probs_dict = get_response_log_probs(model=model,
-                                                            input_ids=input_ids_microbatch,
-                                                            labels=labels_microbatch,
-                                                            return_token_entropy=True,
-                                                            with_grad=False,
-                                                            device=device)
-                old_log_probs = old_log_probs_dict["log_probs"]
+                
                 rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
                                                                 rollout_responses=texts_microbatch,
                                                                 repeated_ground_truths=answers_microbatch,
