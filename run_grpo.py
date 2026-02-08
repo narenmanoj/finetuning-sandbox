@@ -66,7 +66,7 @@ def train_one_epoch(model,
         texts_flattened = list(itertools.chain.from_iterable(texts))
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
         breakpoint()
-        tokenized = tokenize_prompt_and_output(prompt_strs=prompts_flattened, output_strs=texts_flattened, tokenizer=tokenizer)
+        tokenized = tokenize_prompt_and_output(prompt_strs=prompts, output_strs=texts_flattened, tokenizer=tokenizer)
         input_ids = tokenized["input_ids"]
         labels = tokenized["labels"]
         n_train_steps = hyperparams["epochs_per_rollout_batch"] * (len(texts_flattened) // hyperparams["train_batch_size"])
