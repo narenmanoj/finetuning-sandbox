@@ -72,8 +72,8 @@ def train_one_epoch(model,
             macrobatch_start = hyperparams["train_batch_size"] * j
             macrobatch_end = hyperparams["train_batch_size"] * (j + 1)
             for k in range(microbatch_size):
-                microbatch_start = macrobatch_start + microbatch_size * k
-                microbatch_end = macrobatch_start + microbatch_size * (k + 1)
+                microbatch_start = macrobatch_start + microbatch_size * k * hyperparams["group_size"]
+                microbatch_end = macrobatch_start + microbatch_size * (k + 1) * hyperparams["group_size"]
                 texts_microbatch = texts_flattened[microbatch_start: microbatch_end]
                 answers_microbatch = answers_flattened[microbatch_start: microbatch_end]
                 breakpoint()
