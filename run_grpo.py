@@ -67,23 +67,25 @@ def train_one_epoch(model,
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
         tokenized = tokenize_prompt_and_output(prompt_strs=texts_flattened, output_strs=answers_flattened, tokenizer=tokenizer)
         # Do the actual GRPO logic here
-        rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
-                                                   rollout_responses=texts_flattened,
-                                                   repeated_ground_truths=answers_flattened,
-                                                   group_size=hyperparams["group_size"],
-                                                   advantage_eps=hyperparams["advantage_eps"],
-                                                   normalize_by_std=hyperparams["use_std_normalization"])
-        raw_rewards = rewards_dict[1]
-        advantages = rewards_dict[0]
-        old_log_probs_dict = get_response_log_probs(model=model,
-                                                    input_ids=tokenized["input_ids"],
-                                                    labels=tokenized["labels"],
-                                                    return_token_entropy=True,
-                                                    with_grad=False,
-                                                    device=device)
-        old_log_probs = old_log_probs_dict["log_probs"]
+        
         for j in range(hyperparams["n_train_steps_per_rollout_batch"]):
             for k in range(microbatch_size):
+                breakpoint()
+                rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
+                                                                rollout_responses=texts_flattened,
+                                                                repeated_ground_truths=answers_flattened,
+                                                                group_size=hyperparams["group_size"],
+                                                                advantage_eps=hyperparams["advantage_eps"],
+                                                                normalize_by_std=hyperparams["use_std_normalization"])
+                raw_rewards = rewards_dict[1]
+                advantages = rewards_dict[0]
+                old_log_probs_dict = get_response_log_probs(model=model,
+                                                            input_ids=tokenized["input_ids"],
+                                                            labels=tokenized["labels"],
+                                                            return_token_entropy=True,
+                                                            with_grad=False,
+                                                            device=device)
+                old_log_probs = old_log_probs_dict["log_probs"]
                 breakpoint()
                 # figure out microbatch indexing
                 input_ids_microbatch = tokenized["input_ids"]
