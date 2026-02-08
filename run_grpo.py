@@ -85,7 +85,7 @@ def train_one_epoch(model,
                                                     return_token_entropy=True,
                                                     with_grad=False)
         old_log_probs = old_log_probs_dict["log_probs"]
-        for j in range(hyperparams["n_grpo_steps"]):
+        for j in range(hyperparams["n_train_steps_per_rollout_batch"]):
             loss_dict = grpo_microbatch_train_step(policy_log_probs=policy_log_probs,
                                                    response_mask=tokenized["response_mask"],
                                                    gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
