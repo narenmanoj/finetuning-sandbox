@@ -73,19 +73,20 @@ def train_one_epoch(model,
         for j in range(n_train_steps):
             macrobatch_start = hyperparams["train_batch_size"] * j
             macrobatch_end = hyperparams["train_batch_size"] * (j + 1)
-            old_log_probs_dict = get_response_log_probs(model=model,
-                                                        input_ids=input_ids[macrobatch_start: macrobatch_end],
-                                                        labels=labels[macrobatch_start: macrobatch_end],
-                                                        return_token_entropy=True,
-                                                        with_grad=False,
-                                                        device=device)
-            old_log_probs = old_log_probs_dict["log_probs"]
+            
             for k in range(microbatch_size):
                 microbatch_start = macrobatch_start + microbatch_size * k * hyperparams["group_size"]
                 microbatch_end = macrobatch_start + microbatch_size * (k + 1) * hyperparams["group_size"]
                 texts_microbatch = texts_flattened[microbatch_start: microbatch_end]
                 answers_microbatch = answers_flattened[microbatch_start: microbatch_end]
                 breakpoint()
+                old_log_probs_dict = get_response_log_probs(model=model,
+                                                            input_ids=input_ids[microbatch_start: microbatch_end],
+                                                            labels=labels[microbatch_start: microbatch_end],
+                                                            return_token_entropy=True,
+                                                            with_grad=False,
+                                                            device=device)
+                old_log_probs = old_log_probs_dict["log_probs"]
                 rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
                                                                 rollout_responses=texts_microbatch,
                                                                 repeated_ground_truths=answers_microbatch,
