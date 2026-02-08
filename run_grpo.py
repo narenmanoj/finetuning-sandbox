@@ -66,11 +66,20 @@ def train_one_epoch(model,
         texts_flattened = list(itertools.chain.from_iterable(texts))
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
         tokenized = tokenize_prompt_and_output(prompt_strs=texts_flattened, output_strs=answers_flattened, tokenizer=tokenizer)
+        input_ids = tokenized["input_ids"]
+        labels = tokenized["labels"]
         # Do the actual GRPO logic here
         n_train_steps = hyperparams["epochs_per_rollout_batch"] * (len(texts_flattened) // hyperparams["train_batch_size"])
         for j in range(n_train_steps):
             macrobatch_start = hyperparams["train_batch_size"] * j
             macrobatch_end = hyperparams["train_batch_size"] * (j + 1)
+            old_log_probs_dict = get_response_log_probs(model=model,
+                                                        input_ids=input_ids[macrobatch_start: macrobatch_end],
+                                                        labels=labels[macrobatch_start: macrobatch_end],
+                                                        return_token_entropy=True,
+                                                        with_grad=False,
+                                                        device=device)
+            old_log_probs = old_log_probs_dict["log_probs"]
             for k in range(microbatch_size):
                 microbatch_start = macrobatch_start + microbatch_size * k * hyperparams["group_size"]
                 microbatch_end = macrobatch_start + microbatch_size * (k + 1) * hyperparams["group_size"]
@@ -85,18 +94,8 @@ def train_one_epoch(model,
                                                                 normalize_by_std=hyperparams["use_std_normalization"])
                 raw_rewards = rewards_dict[1]
                 advantages = rewards_dict[0]
-                old_log_probs_dict = get_response_log_probs(model=model,
-                                                            input_ids=tokenized["input_ids"],
-                                                            labels=tokenized["labels"],
-                                                            return_token_entropy=True,
-                                                            with_grad=False,
-                                                            device=device)
-                old_log_probs = old_log_probs_dict["log_probs"]
+                
                 breakpoint()
-                # figure out microbatch indexing
-                input_ids_microbatch = tokenized["input_ids"]
-                label_ids_microbatch = tokenized["labels"]
-                # advantages = 
                 log_probs_dict = get_response_log_probs(model=model,
                                                         input_ids=input_ids_microbatch,
                                                         labels=label_ids_microbatch,
@@ -109,7 +108,7 @@ def train_one_epoch(model,
                                                        loss_type=hyperparams["loss_type"],
                                                        raw_rewards=raw_rewards,
                                                        advantages=advantages,
-                                                       old_log_probs=old_log_probs,
+                                                       old_log_probs=old_log_probs[microbatch_start: microbatch_end],
                                                        cliprange=hyperparams["cliprange"])
                 breakpoint()
 
