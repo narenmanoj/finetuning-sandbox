@@ -72,12 +72,15 @@ def train_one_epoch(model,
         input_ids = tokenized["input_ids"]
         labels = tokenized["labels"]
         n_train_steps = hyperparams["epochs_per_rollout_batch"] * (num_examples // hyperparams["train_batch_size"])
-
+        rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
+                                                        rollout_responses=texts_microbatch,
+                                                        repeated_ground_truths=answers_microbatch,
+                                                        group_size=hyperparams["group_size"],
+                                                        advantage_eps=hyperparams["advantage_eps"],
+                                                        normalize_by_std=hyperparams["use_std_normalization"])
+        raw_rewards = rewards_dict[1]
+        advantages = rewards_dict[0]
         for j in range(n_train_steps):
-            macrobatch_start = (hyperparams["train_batch_size"] * j) % num_examples
-            macrobatch_end = (hyperparams["train_batch_size"] * (j + 1)) % num_examples
-            input_ids_macrobatch = input_ids[macrobatch_start: macrobatch_end]
-            labels_macrobatch = input_ids[macrobatch_start: macrobatch_end]
             old_log_probs_dict = get_response_log_probs(model=model,
                                                         input_ids=input_ids_microbatch,
                                                         labels=labels_microbatch,
@@ -85,23 +88,14 @@ def train_one_epoch(model,
                                                         with_grad=False,
                                                         device=device)
             old_log_probs = old_log_probs_dict["log_probs"]
+            
             for k in range(n_microbatches): # n_train_steps
-                microbatch_start = macrobatch_start + microbatch_size * k * hyperparams["group_size"]
-                microbatch_end = macrobatch_start + microbatch_size * (k + 1) * hyperparams["group_size"]
-                texts_microbatch = texts_flattened[microbatch_start: microbatch_end]
-                answers_microbatch = answers_flattened[microbatch_start: microbatch_end]
+                microbatch_start = microbatch_size * k * hyperparams["group_size"]
+                microbatch_end = microbatch_size * (k + 1) * hyperparams["group_size"]
                 input_ids_microbatch = input_ids[microbatch_start: microbatch_end]
                 labels_microbatch = labels[microbatch_start: microbatch_end]
-                
-                rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
-                                                                rollout_responses=texts_microbatch,
-                                                                repeated_ground_truths=answers_microbatch,
-                                                                group_size=hyperparams["group_size"],
-                                                                advantage_eps=hyperparams["advantage_eps"],
-                                                                normalize_by_std=hyperparams["use_std_normalization"])
-                raw_rewards = rewards_dict[1]
-                advantages = rewards_dict[0]
-                
+                texts_microbatch = texts_flattened[microbatch_start: microbatch_end]
+                answers_microbatch = answers_flattened[microbatch_start: microbatch_end]
                 breakpoint()
                 log_probs_dict = get_response_log_probs(model=model,
                                                         input_ids=input_ids_microbatch,
@@ -118,9 +112,10 @@ def train_one_epoch(model,
                                                        old_log_probs=old_log_probs,
                                                        cliprange=hyperparams["cliprange"])
                 breakpoint()
-
-            optimizer.step()
-            optimizer.zero_grad()
+                if (k + 1) % hyperparams["gradient_accumulation_steps"] == 0:
+                    optimizer.step()
+                    optimizer.zero_grad()
+            
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),
