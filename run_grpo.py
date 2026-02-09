@@ -52,69 +52,61 @@ def train_one_epoch(model,
                     device,
                     val_dataloader=None,
                     print_every=100):
-    last_reward = 0.0
-    num_epochs = hyperparams["n_grpo_steps"]
-    microbatch_size = hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"]
+    n_grpo_steps = hyperparams["n_grpo_steps"]
     pbar = tqdm(enumerate(dataloader), total=len(dataloader), 
-                desc=f"Epoch {epoch_index+1}/{num_epochs}", leave=True)
-    n_microbatches = hyperparams["train_batch_size"] // microbatch_size
+                desc=f"GRPO step {epoch_index+1}/{n_grpo_steps}", leave=True)
+    micro_train_batch_size = hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"]
+    n_train_batches = hyperparams["rollout_batch_size"]  // hyperparams["train_batch_size"] # both are in numbers of responses
     for i, data in pbar:
         prompts = data["problem"]
         answers = data["answer"]
-        texts = rollout_client.generate(prompts, sampling_params_dict)
-        texts_flattened = list(itertools.chain.from_iterable(texts))
         prompts_flattened = [s for s in prompts for _ in range(hyperparams["group_size"])]
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
-        breakpoint()
-        tokenized = tokenize_prompt_and_output(prompt_strs=prompts_flattened, output_strs=texts_flattened, tokenizer=tokenizer)
+        responses = rollout_client.generate(prompts, sampling_params_dict)
+        
+        responses_flattened = list(itertools.chain.from_iterable(responses))
+        tokenized = tokenize_prompt_and_output(prompt_strs=prompts_flattened, output_strs=responses_flattened, tokenizer=tokenizer)
         input_ids = tokenized["input_ids"]
         labels = tokenized["labels"]
         response_mask = tokenized["response_mask"]
         rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
-                                                        rollout_responses=texts_flattened,
+                                                        rollout_responses=responses_flattened,
                                                         repeated_ground_truths=answers_flattened,
                                                         group_size=hyperparams["group_size"],
                                                         advantage_eps=hyperparams["advantage_eps"],
                                                         normalize_by_std=hyperparams["use_std_normalization"])
         raw_rewards = rewards_dict[1]
-        advantages = rewards_dict[0]
         last_reward = torch.mean(raw_rewards)
-        old_log_probs_dict = get_response_log_probs(model=model,
-                                                    input_ids=input_ids,
-                                                    labels=labels,
-                                                    return_token_entropy=True,
-                                                    with_grad=False,
-                                                    device=device)
-        old_log_probs = old_log_probs_dict["log_probs"]
-        for j in range(hyperparams["epochs_per_rollout_batch"]):
-            for k in range(n_microbatches): # n_train_steps
-                microbatch_start = microbatch_size * k * hyperparams["group_size"]
-                microbatch_end = microbatch_size * (k + 1) * hyperparams["group_size"]
-                input_ids_microbatch = input_ids[microbatch_start: microbatch_end]
-                labels_microbatch = labels[microbatch_start: microbatch_end]
-                old_log_probs_microbatch = old_log_probs[microbatch_start: microbatch_end]
-                raw_rewards_microbatch = raw_rewards[microbatch_start: microbatch_end]
-                advantages_microbatch = advantages[microbatch_start: microbatch_end]
-                response_mask_microbatch = response_mask[microbatch_start: microbatch_end]
-                breakpoint()
-                log_probs_dict = get_response_log_probs(model=model,
-                                                        input_ids=input_ids_microbatch,
-                                                        labels=labels_microbatch,
-                                                        return_token_entropy=True,
-                                                        with_grad=True)
-                policy_log_probs = log_probs_dict["log_probs"]
-                loss_dict = grpo_microbatch_train_step(policy_log_probs=policy_log_probs,
-                                                       response_mask=response_mask_microbatch,
-                                                       gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
-                                                       loss_type=hyperparams["loss_type"],
-                                                       raw_rewards=raw_rewards_microbatch,
-                                                       advantages=advantages_microbatch,
-                                                       old_log_probs=old_log_probs_microbatch,
-                                                       cliprange=hyperparams["cliprange"])
-                breakpoint()
-                if (k + 1) % hyperparams["gradient_accumulation_steps"] == 0:
-                    optimizer.step()
-                    optimizer.zero_grad()
+        advantages = rewards_dict[0]
+        for _ in range(hyperparams["epochs_per_rollout_batch"]):
+            for j in range(n_train_batches):
+                macrobatch_start = j * hyperparams["train_batch_size"]
+                for k in range(hyperparams["gradient_accumulation_steps"]):
+                    microbatch_start = macrobatch_start + k * micro_train_batch_size
+                    microbatch_end = macrobatch_start + (k + 1) * micro_train_batch_size
+                    # load and process a microbatch
+                    input_ids_microbatch = input_ids[microbatch_start: microbatch_end]
+                    labels_microbatch = labels[microbatch_start: microbatch_end]
+                    response_mask_microbatch = response_mask[microbatch_start: microbatch_end]
+                    raw_rewards_microbatch = raw_rewards[microbatch_start: microbatch_end]
+                    advantages_microbatch = advantages[microbatch_start: microbatch_end]
+                    log_probs_dict = get_response_log_probs(model=model,
+                                                            input_ids=input_ids_microbatch,
+                                                            labels=labels_microbatch,
+                                                            return_token_entropy=True,
+                                                            with_grad=True,
+                                                            device=device)
+                    policy_log_probs = log_probs_dict["log_probs"]
+                    loss_dict = grpo_microbatch_train_step(policy_log_probs=policy_log_probs,
+                                                        response_mask=response_mask_microbatch,
+                                                        gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
+                                                        loss_type=hyperparams["loss_type"],
+                                                        raw_rewards=raw_rewards_microbatch,
+                                                        advantages=advantages_microbatch,
+                                                        old_log_probs=old_log_probs_microbatch,
+                                                        cliprange=hyperparams["cliprange"])
+                optimizer.step()
+                optimizer.zero_grad()
             
     torch.save({
         EPOCH_KEY: epoch_index,
@@ -272,12 +264,15 @@ if __name__ == "__main__":
                              vllm_dtype=hyperparams["dtype"],
                              gpu_mem_util=hyperparams["gpu_memory_utilization"],
                              gpu_id=num_gpus - 1)
-
+    n_prompts_per_rollout_batch = hyperparams["rollout_batch_size"] // hyperparams["group_size"]
+    assert hyperparams["group_size"] * n_prompts_per_rollout_batch == hyperparams["rollout_batch_size"], (
+        "rollout_batch_size must be divisible by group_size"
+    )
     train_dataloader = DataLoader(train_dataset,
-                                  batch_size=hyperparams["rollout_batch_size"],
+                                  batch_size=n_prompts_per_rollout_batch,
                                   shuffle=True)
     test_dataloader = DataLoader(test_dataset,
-                                 batch_size=hyperparams["rollout_batch_size"],
+                                 batch_size=n_prompts_per_rollout_batch,
                                  shuffle=True)
     opt_params = hyperparams["optimizer_params"]
     optimizer = torch.optim.AdamW(model.parameters(),
