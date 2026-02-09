@@ -74,6 +74,7 @@ def masked_mean(
     mask: torch.Tensor,
     dim: int | None = None,
 ) -> torch.Tensor:
+    mask = mask.to(torch.bool)
     return torch.nanmean(torch.masked_fill(tensor, ~mask, float("nan")), dim=dim)
 
 

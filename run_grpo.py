@@ -78,6 +78,20 @@ def train_one_epoch(model,
         raw_rewards = rewards_dict[1]
         last_reward = torch.mean(raw_rewards)
         advantages = rewards_dict[0]
+        # a cute memory hack
+        N, T = input_ids.shape
+        old_log_probs_cache = torch.empty((N, T), dtype=torch.float16, device="cpu")
+        for start in range(0, N, micro_train_batch_size):
+            end = min(start + micro_train_batch_size, N)
+            out = get_response_log_probs(
+                model=model,
+                input_ids=input_ids[start:end],
+                labels=labels[start:end],
+                with_grad=False,
+                device=device,
+            )
+            old_log_probs_cache[start:end] = out["log_probs"].detach().to("cpu", dtype=torch.float16)
+
         for _ in range(hyperparams["epochs_per_rollout_batch"]):
             for j in range(n_train_batches):
                 macrobatch_start = j * hyperparams["train_batch_size"]
@@ -85,12 +99,11 @@ def train_one_epoch(model,
                     microbatch_start = macrobatch_start + k * micro_train_batch_size
                     microbatch_end = macrobatch_start + (k + 1) * micro_train_batch_size
                     # load and process a microbatch
-                    input_ids_microbatch = input_ids[microbatch_start: microbatch_end]
-                    labels_microbatch = labels[microbatch_start: microbatch_end]
-                    response_mask_microbatch = response_mask[microbatch_start: microbatch_end]
-                    raw_rewards_microbatch = raw_rewards[microbatch_start: microbatch_end]
-                    advantages_microbatch = advantages[microbatch_start: microbatch_end]
-                    old_log_probs_microbatch = log_probs[microbatch_start: microbatch_end]
+                    input_ids_microbatch = input_ids[microbatch_start: microbatch_end].to(device=device)
+                    labels_microbatch = labels[microbatch_start: microbatch_end].to(device=device)
+                    response_mask_microbatch = response_mask[microbatch_start: microbatch_end].to(device=device)
+                    raw_rewards_microbatch = raw_rewards[microbatch_start: microbatch_end].to(device=device)
+                    advantages_microbatch = advantages[microbatch_start: microbatch_end].to(device=device)
                     log_probs_dict = get_response_log_probs(model=model,
                                                             input_ids=input_ids_microbatch,
                                                             labels=labels_microbatch,
@@ -98,14 +111,15 @@ def train_one_epoch(model,
                                                             with_grad=True,
                                                             device=device)
                     policy_log_probs = log_probs_dict["log_probs"]
+                    old_log_probs_microbatch = old_log_probs_cache[microbatch_start: microbatch_end].to(device=device, dtype=policy_log_probs.dtype)
                     loss_dict = grpo_microbatch_train_step(policy_log_probs=policy_log_probs,
-                                                        response_mask=response_mask_microbatch,
-                                                        gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
-                                                        loss_type=hyperparams["loss_type"],
-                                                        raw_rewards=raw_rewards_microbatch,
-                                                        advantages=advantages_microbatch,
-                                                        old_log_probs=old_log_probs_microbatch,
-                                                        cliprange=hyperparams["cliprange"])
+                                                           response_mask=response_mask_microbatch,
+                                                           gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
+                                                           loss_type=hyperparams["loss_type"],
+                                                           raw_rewards=raw_rewards_microbatch,
+                                                           advantages=advantages_microbatch,
+                                                           old_log_probs=old_log_probs_microbatch,
+                                                           cliprange=hyperparams["cliprange"])
                 optimizer.step()
                 optimizer.zero_grad()
             
