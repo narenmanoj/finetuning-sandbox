@@ -90,6 +90,7 @@ def train_one_epoch(model,
                     response_mask_microbatch = response_mask[microbatch_start: microbatch_end]
                     raw_rewards_microbatch = raw_rewards[microbatch_start: microbatch_end]
                     advantages_microbatch = advantages[microbatch_start: microbatch_end]
+                    old_log_probs_microbatch = log_probs[microbatch_start: microbatch_end]
                     log_probs_dict = get_response_log_probs(model=model,
                                                             input_ids=input_ids_microbatch,
                                                             labels=labels_microbatch,
