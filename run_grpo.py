@@ -125,6 +125,7 @@ def train_one_epoch(model,
         for epoch_id in range(hyperparams["epochs_per_rollout_batch"]):
             for j in range(n_train_batches):
                 macrobatch_start = j * hyperparams["train_batch_size"]
+                batch_loss = 0
                 for k in range(hyperparams["gradient_accumulation_steps"]):
                     microbatch_start = macrobatch_start + k * micro_train_batch_size
                     microbatch_end = macrobatch_start + (k + 1) * micro_train_batch_size
@@ -150,8 +151,10 @@ def train_one_epoch(model,
                                                            advantages=advantages_microbatch.unsqueeze(-1),
                                                            old_log_probs=old_log_probs_microbatch,
                                                            cliprange=hyperparams["cliprange"])
+                    batch_loss += loss_dict[0]
                 gn = global_grad_norm(model.parameters()).item()
                 tb_writer.add_scalar("Grad/global_norm", gn, epoch_id + j * hyperparams["train_batch_size"])
+                tb_writer.add_scalar("Grad/GRPO_loss", batch_loss, epoch_id + j * hyperparams["train_batch_size"])
                 optimizer.step()
                 optimizer.zero_grad()
                 optimizer.step()
