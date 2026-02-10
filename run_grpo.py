@@ -3,6 +3,7 @@ from datetime import datetime
 import gc
 import itertools
 import json
+from mistral_common.tokens.tokenizers.mistral import MistralTokenizer
 import multiprocessing as mp
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
 
 from algorithms import evaluate_vllm, load_model_and_dataset
 from grpo import compute_group_normalized_rewards, grpo_microbatch_train_step
@@ -293,7 +295,8 @@ if __name__ == "__main__":
         epoch_index = args.load_checkpoint.rsplit("/", 1)[1]
         hyperparams = read_json_to_dict(Path(f"{logdir}/config.json"))
 
-    tokenizer = AutoTokenizer.from_pretrained(hyperparams["model_str"])
+    # tokenizer = AutoTokenizer.from_pretrained(hyperparams["model_str"])
+    tok_mc = MistralTokenizer.from_hf_hub(hyperparams["model_str"])
     model, train_dataset, test_dataset = load_model_and_dataset(model_str=hyperparams["model_str"],
                                                                 dataset_str=hyperparams["dataset_str"],
                                                                 prompt="prompts/r1_zero.prompt",
