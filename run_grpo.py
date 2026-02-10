@@ -125,8 +125,8 @@ def train_one_epoch(model,
                                                            response_mask=response_mask_microbatch,
                                                            gradient_accumulation_steps=hyperparams["gradient_accumulation_steps"],
                                                            loss_type=hyperparams["loss_type"],
-                                                           raw_rewards=raw_rewards_microbatch,
-                                                           advantages=advantages_microbatch,
+                                                           raw_rewards=raw_rewards_microbatch.unsqueeze(-1),
+                                                           advantages=advantages_microbatch.unsqueeze(-1),
                                                            old_log_probs=old_log_probs_microbatch,
                                                            cliprange=hyperparams["cliprange"])
                 optimizer.step()
