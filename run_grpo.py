@@ -96,6 +96,7 @@ def train_one_epoch(model,
                 device=device,
                 return_token_entropy=True,
             )
+            breakpoint()
             total_ent += out["token_entropy"]
             denom += micro_train_batch_size
             old_log_probs_cache[start:end] = out["log_probs"].detach().to("cpu", dtype=torch.float16)
