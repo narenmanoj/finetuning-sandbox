@@ -14,7 +14,6 @@ from vllm import LLM, SamplingParams
 
 def format_dataset(base_prompt, dataset):
     df = dataset.to_pandas()
-    breakpoint()
     df["question"] = df["question"].map(lambda x: base_prompt.format(question=x))
     return Dataset.from_pandas(df)
 
