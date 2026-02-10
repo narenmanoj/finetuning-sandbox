@@ -38,6 +38,19 @@ def read_json_to_dict(filename):
         print(f"Error: Could not decode JSON from the file '{filename}'. Check file format.")
         return None
 
+
+def global_grad_norm(parameters, norm_type=2.0):
+    params = [p for p in parameters if p.grad is not None]
+    if len(params) == 0:
+        return torch.tensor(0.0)
+    device = params[0].grad.device
+    total = torch.zeros([], device=device)
+    for p in params:
+        param_norm = p.grad.detach().data.norm(norm_type)
+        total += param_norm ** norm_type
+    return total ** (1.0 / norm_type)
+
+
 def train_one_epoch(model,
                     rollout_client,
                     optimizer,
@@ -136,6 +149,10 @@ def train_one_epoch(model,
                                                            advantages=advantages_microbatch.unsqueeze(-1),
                                                            old_log_probs=old_log_probs_microbatch,
                                                            cliprange=hyperparams["cliprange"])
+                gn = global_grad_norm(model.parameters()).item()
+                tb_writer.add_scalar("Grad/global_norm", gn, epoch_id + j * hyperparams["train_batch_size"])
+                optimizer.step()
+                optimizer.zero_grad()
                 optimizer.step()
                 optimizer.zero_grad()
                 
