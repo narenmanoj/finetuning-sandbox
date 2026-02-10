@@ -14,6 +14,7 @@ from vllm import LLM, SamplingParams
 
 def format_dataset(base_prompt, dataset):
     df = dataset.to_pandas()
+    breakpoint()
     df["problem"] = df["problem"].map(lambda x: base_prompt.format(question=x))
     return Dataset.from_pandas(df)
 
@@ -54,7 +55,7 @@ def load_model_and_dataset(model_str, dataset_str, prompt=None, dtype="float16",
 
 if __name__ == "__main__":
     llm, train_dataset, test_dataset = load_model_and_dataset(model_str="Qwen/Qwen2.5-Math-1.5B",
-                                                              dataset_str="hiyouga/math12k",
+                                                              dataset_str="PrimeIntellect/Hendrycks-Math",
                                                               prompt="prompts/r1_zero.prompt",
                                                               dtype="float16")
     train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
