@@ -71,7 +71,7 @@ def train_one_epoch(model,
     micro_train_batch_size = hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"]
     n_train_batches = hyperparams["rollout_batch_size"]  // hyperparams["train_batch_size"] # both are in numbers of responses
     for i, data in pbar:
-        prompts = data["question"]
+        prompts = data["problem"]
         answers = data["answer"]
         prompts_flattened = [s for s in prompts for _ in range(hyperparams["group_size"])]
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
@@ -293,7 +293,7 @@ if __name__ == "__main__":
         epoch_index = args.load_checkpoint.rsplit("/", 1)[1]
         hyperparams = read_json_to_dict(Path(f"{logdir}/config.json"))
 
-    tokenizer = AutoTokenizer.from_pretrained(hyperparams["model_str"], use_fast=True, fix_mistral_regex=True)
+    tokenizer = AutoTokenizer.from_pretrained(hyperparams["model_str"])
     model, train_dataset, test_dataset = load_model_and_dataset(model_str=hyperparams["model_str"],
                                                                 dataset_str=hyperparams["dataset_str"],
                                                                 prompt="prompts/r1_zero.prompt",
