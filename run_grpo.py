@@ -161,8 +161,13 @@ def train_one_epoch(model,
                     if batch_loss != batch_loss:
                         breakpoint()
                 gn = global_grad_norm(model.parameters()).item()
-                tb_writer.add_scalar("Grad/global_norm", gn, epoch_id + j * hyperparams["train_batch_size"])
-                tb_writer.add_scalar("Grad/GRPO_loss", batch_loss, epoch_id + j * hyperparams["train_batch_size"])
+                global_step = (
+                    epoch_index * (len(dataloader) * n_train_batches)  # all logs from previous GRPO steps
+                    + i * n_train_batches                              # all logs from previous rollout batches this GRPO step
+                    + j                                                # this macrobatch
+                )
+                tb_writer.add_scalar("Grad/global_norm", gn, global_step)
+                tb_writer.add_scalar("Grad/GRPO_loss", batch_loss, global_step)
                 optimizer.step()
                 optimizer.zero_grad()
                 
