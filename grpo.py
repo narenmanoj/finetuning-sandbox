@@ -74,8 +74,9 @@ def masked_mean(
     mask: torch.Tensor,
     dim: int | None = None,
 ) -> torch.Tensor:
-    mask = mask.to(torch.bool)
-    return torch.nanmean(torch.masked_fill(tensor, ~mask, float("nan")), dim=dim)
+    mask = mask.to(torch.bool).float()
+    masked_tensor = tensor * mask
+    return torch.sum(masked_tensor, dim=dim) / torch.sum(mask, dim=dim)
 
 
 def grpo_microbatch_train_step(
