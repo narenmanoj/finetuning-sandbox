@@ -295,8 +295,8 @@ if __name__ == "__main__":
         epoch_index = args.load_checkpoint.rsplit("/", 1)[1]
         hyperparams = read_json_to_dict(Path(f"{logdir}/config.json"))
 
-    # tokenizer = AutoTokenizer.from_pretrained(hyperparams["model_str"])
-    tok_mc = MistralTokenizer.from_hf_hub(hyperparams["model_str"])
+    tokenizer = AutoTokenizer.from_pretrained(hyperparams["model_str"], fix_mistral_regex=True)
+    # tok_mc = MistralTokenizer.from_hf_hub(hyperparams["dataset_str"])
     model, train_dataset, test_dataset = load_model_and_dataset(model_str=hyperparams["model_str"],
                                                                 dataset_str=hyperparams["dataset_str"],
                                                                 prompt="prompts/r1_zero.prompt",
