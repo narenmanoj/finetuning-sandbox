@@ -1,6 +1,6 @@
 {
     "model_str": "Qwen/Qwen2.5-Math-1.5B",
-    "dataset_str": "hiyouga/math12k",
+    "dataset_str": "PrimeIntellect/Hendrycks-Math",
     "dtype": "float16",
     "n_grpo_steps": 200,
     "advantage_eps": 1e-6,

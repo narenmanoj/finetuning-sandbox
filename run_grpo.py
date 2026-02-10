@@ -163,8 +163,6 @@ def train_one_epoch(model,
                 tb_writer.add_scalar("Grad/GRPO_loss", batch_loss, epoch_id + j * hyperparams["train_batch_size"])
                 optimizer.step()
                 optimizer.zero_grad()
-                optimizer.step()
-                optimizer.zero_grad()
                 
     torch.save({
         EPOCH_KEY: epoch_index,
