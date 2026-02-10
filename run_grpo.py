@@ -76,9 +76,10 @@ def train_one_epoch(model,
                                                         advantage_eps=hyperparams["advantage_eps"],
                                                         normalize_by_std=hyperparams["use_std_normalization"])
         raw_rewards = rewards_dict[1]
+        last_reward = torch.mean(raw_rewards)
         tb_writer.add_scalar("Reward/train", last_reward, i) # batch reward
         
-        last_reward = torch.mean(raw_rewards)
+        
         advantages = rewards_dict[0]
         # a cute memory hack
         N, T = input_ids.shape
