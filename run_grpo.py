@@ -90,7 +90,7 @@ def train_one_epoch(model,
         input_ids = tokenized["input_ids"]
         labels = tokenized["labels"]
         response_mask = tokenized["response_mask"]
-        attention_mask = attention_mask["attention_mask"]
+        attention_mask = tokenized["attention_mask"]
         rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
                                                         rollout_responses=responses_flattened,
                                                         repeated_ground_truths=answers_flattened,
