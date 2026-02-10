@@ -71,7 +71,7 @@ def train_one_epoch(model,
     micro_train_batch_size = hyperparams["train_batch_size"] // hyperparams["gradient_accumulation_steps"]
     n_train_batches = hyperparams["rollout_batch_size"]  // hyperparams["train_batch_size"] # both are in numbers of responses
     for i, data in pbar:
-        prompts = data["problem"]
+        prompts = data["question"]
         answers = data["answer"]
         prompts_flattened = [s for s in prompts for _ in range(hyperparams["group_size"])]
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
