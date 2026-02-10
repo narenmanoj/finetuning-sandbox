@@ -1,7 +1,7 @@
 {
     "model_str": "Qwen/Qwen2.5-Math-1.5B",
     "dataset_str": "nlile/hendrycks-MATH-benchmark",
-    "dtype": "float16",
+    "dtype": "bfloat16",
     "n_grpo_steps": 200,
     "advantage_eps": 1e-6,
     "rollout_batch_size": 256,
