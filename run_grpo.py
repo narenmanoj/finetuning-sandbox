@@ -76,11 +76,15 @@ def train_one_epoch(model,
                                                         advantage_eps=hyperparams["advantage_eps"],
                                                         normalize_by_std=hyperparams["use_std_normalization"])
         raw_rewards = rewards_dict[1]
+        tb_writer.add_scalar("Reward/train", last_reward, i) # batch reward
+        
         last_reward = torch.mean(raw_rewards)
         advantages = rewards_dict[0]
         # a cute memory hack
         N, T = input_ids.shape
         old_log_probs_cache = torch.empty((N, T), dtype=torch.float16, device="cpu")
+        total_ent = 0
+        denom = 0
         for start in range(0, N, micro_train_batch_size):
             end = min(start + micro_train_batch_size, N)
             out = get_response_log_probs(
@@ -89,10 +93,14 @@ def train_one_epoch(model,
                 labels=labels[start:end],
                 with_grad=False,
                 device=device,
+                return_token_entropy=True,
             )
+            total_ent += out["token_entropy"]
+            denom += micro_train_batch_size
             old_log_probs_cache[start:end] = out["log_probs"].detach().to("cpu", dtype=torch.float16)
-
-        for _ in range(hyperparams["epochs_per_rollout_batch"]):
+        total_ent /= denom
+        tb_writer.add_scalar("Generations/entropy", total_ent, i) # avg token entropy
+        for epoch_id in range(hyperparams["epochs_per_rollout_batch"]):
             for j in range(n_train_batches):
                 macrobatch_start = j * hyperparams["train_batch_size"]
                 for k in range(hyperparams["gradient_accumulation_steps"]):
@@ -122,7 +130,7 @@ def train_one_epoch(model,
                                                            cliprange=hyperparams["cliprange"])
                 optimizer.step()
                 optimizer.zero_grad()
-            
+                
     torch.save({
         EPOCH_KEY: epoch_index,
         MODEL_STATE_KEY: model.state_dict(),
