@@ -151,8 +151,9 @@ def train_one_epoch(model,
                                                            advantages=advantages_microbatch.unsqueeze(-1),
                                                            old_log_probs=old_log_probs_microbatch,
                                                            cliprange=hyperparams["cliprange"])
-                    breakpoint()
-                    batch_loss += loss_dict[0]
+                    batch_loss += loss_dict[0].detach()
+                    if batch_loss != batch_loss:
+                        breakpoint()
                 gn = global_grad_norm(model.parameters()).item()
                 tb_writer.add_scalar("Grad/global_norm", gn, epoch_id + j * hyperparams["train_batch_size"])
                 tb_writer.add_scalar("Grad/GRPO_loss", batch_loss, epoch_id + j * hyperparams["train_batch_size"])
