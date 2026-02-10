@@ -90,6 +90,7 @@ def train_one_epoch(model,
         input_ids = tokenized["input_ids"]
         labels = tokenized["labels"]
         response_mask = tokenized["response_mask"]
+        attention_mask = attention_mask["attention_mask"]
         rewards_dict = compute_group_normalized_rewards(reward_fn=reward_fn,
                                                         rollout_responses=responses_flattened,
                                                         repeated_ground_truths=answers_flattened,
@@ -113,6 +114,7 @@ def train_one_epoch(model,
                 model=model,
                 input_ids=input_ids[start:end],
                 labels=labels[start:end],
+                attention_mask=attention_mask[start:end],
                 with_grad=False,
                 device=device,
                 return_token_entropy=True,
@@ -135,9 +137,11 @@ def train_one_epoch(model,
                     response_mask_microbatch = response_mask[microbatch_start: microbatch_end].to(device=device)
                     raw_rewards_microbatch = raw_rewards[microbatch_start: microbatch_end].to(device=device)
                     advantages_microbatch = advantages[microbatch_start: microbatch_end].to(device=device)
+                    attention_mask_microbatch = attention_mask[microbatch_start: microbatch_end].to(device=device)
                     log_probs_dict = get_response_log_probs(model=model,
                                                             input_ids=input_ids_microbatch,
                                                             labels=labels_microbatch,
+                                                            attention_mask=attention_mask_microbatch,
                                                             return_token_entropy=True,
                                                             with_grad=True,
                                                             device=device)
