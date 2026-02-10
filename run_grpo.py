@@ -63,6 +63,13 @@ def train_one_epoch(model,
         prompts_flattened = [s for s in prompts for _ in range(hyperparams["group_size"])]
         answers_flattened = [s for s in answers for _ in range(hyperparams["group_size"])]
         responses = rollout_client.generate(prompts, sampling_params_dict)
+
+        assert len(responses_flattened) == hyperparams["rollout_batch_size"]
+        assert len(prompts_flattened) == len(responses_flattened)
+        assert len(answers_flattened) == len(responses_flattened)
+        assert hyperparams["rollout_batch_size"] % hyperparams["train_batch_size"] == 0
+        assert hyperparams["train_batch_size"] % hyperparams["gradient_accumulation_steps"] == 0
+
         
         responses_flattened = list(itertools.chain.from_iterable(responses))
         tokenized = tokenize_prompt_and_output(prompt_strs=prompts_flattened, output_strs=responses_flattened, tokenizer=tokenizer)
