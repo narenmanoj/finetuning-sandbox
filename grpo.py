@@ -76,7 +76,7 @@ def masked_mean(
 ) -> torch.Tensor:
     mask = mask.to(torch.bool).float()
     masked_tensor = tensor * mask
-    return torch.sum(masked_tensor, dim=dim) / torch.sum(mask, dim=dim)
+    return torch.sum(masked_tensor, dim=dim) / (torch.sum(mask, dim=dim))
 
 
 def grpo_microbatch_train_step(
